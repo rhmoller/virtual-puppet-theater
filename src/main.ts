@@ -6,6 +6,7 @@ import type {
   LandmarkList,
 } from "@mediapipe/hands";
 import { Puppet } from "./puppet";
+import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
 
 declare global {
@@ -63,7 +64,7 @@ const puppets = puppetSpecs.map((spec) => {
   const puppet = new Puppet(spec.color);
   puppet.root.visible = false;
   scene.add(puppet.root);
-  return { ...spec, puppet };
+  return { ...spec, puppet, ragdoll: new Ragdoll(puppet), wasVisible: false };
 });
 
 function viewSize(z = 0) {
@@ -328,12 +329,15 @@ function updatePuppet(i: number) {
   }
 
   const p = spec.puppet.root;
-  p.visible = s.visible > 0.02;
+  const visible = s.visible > 0.02;
+  p.visible = visible;
   p.position.set(s.x, s.y, PUPPET_Z);
   p.rotation.z = s.roll;
   p.scale.setScalar(0.9 * PUPPET_DEPTH_SCALE * Math.max(0.3, s.visible));
   spec.puppet.setOpen(s.open);
   spec.puppet.setGaze(s.gazeX, s.gazeY);
+  if (visible && !spec.wasVisible) spec.ragdoll.reset();
+  spec.wasVisible = visible;
 }
 
 const hands = new window.Hands({
@@ -383,6 +387,7 @@ tickLoader();
 
 let cameraReady = false;
 let sending = false;
+let lastFrameTime = performance.now();
 async function frame() {
   if (cameraReady && !sending && video.readyState >= 2) {
     sending = true;
@@ -390,7 +395,13 @@ async function frame() {
       sending = false;
     });
   }
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
   for (let i = 0; i < puppets.length; i++) updatePuppet(i);
+  for (const spec of puppets) {
+    if (spec.puppet.root.visible) spec.ragdoll.update(dt);
+  }
   drawLandmarks();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
