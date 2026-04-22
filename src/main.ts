@@ -416,15 +416,10 @@ function tickLoader() {
 }
 tickLoader();
 
-const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-video.srcObject = stream;
-await video.play();
-await hands.initialize();
-ready = true;
-
+let cameraReady = false;
 let sending = false;
 async function frame() {
-  if (!sending && video.readyState >= 2) {
+  if (cameraReady && !sending && video.readyState >= 2) {
     sending = true;
     hands.send({ image: video }).finally(() => {
       sending = false;
@@ -436,3 +431,22 @@ async function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Kick off camera + MediaPipe asynchronously so rendering isn't blocked if
+// camera permission is denied or MediaPipe fails to load.
+(async () => {
+  // Safety timeout so a hung init doesn't leave the user stuck on the loader.
+  const timeout = setTimeout(() => { ready = true; }, 4000);
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error("no getUserMedia");
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await video.play();
+    await hands.initialize();
+    cameraReady = true;
+  } catch (err) {
+    console.warn("Camera unavailable:", err);
+  }
+  clearTimeout(timeout);
+  ready = true;
+})();
