@@ -6,6 +6,7 @@ import type {
   LandmarkList,
 } from "@mediapipe/hands";
 import { Puppet } from "./puppet";
+import { Theater } from "./theater";
 
 declare global {
   interface Window {
@@ -28,11 +29,15 @@ const scene = new THREE.Scene();
 const SCENE_BG = new THREE.Color(0x000000);
 scene.background = SCENE_BG;
 
+const theater = new Theater();
+scene.add(theater.root);
+
 let debug = false;
 function setDebug(on: boolean) {
   debug = on;
   document.body.classList.toggle("debug", debug);
   scene.background = debug ? null : SCENE_BG;
+  theater.setVisible(!debug);
 }
 window.addEventListener("keydown", (e) => {
   if (e.key === "d" || e.key === "D") setDebug(!debug);
@@ -73,6 +78,8 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  const view = viewSize(0);
+  theater.layout(view.w, view.h);
 }
 window.addEventListener("resize", resize);
 resize();
