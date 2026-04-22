@@ -63,15 +63,6 @@ export class Theater {
     backWall.position.set(0, (iyTop + iyBot) / 2, -2);
     this.group.add(backWall);
 
-    // Wooden stage floor, tilted slightly forward.
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(innerW * 1.05, (iyTop - iyBot) * 0.45),
-      this.mWood,
-    );
-    floor.position.set(0, iyBot + 0.02, -1.2);
-    floor.rotation.x = -Math.PI / 9;
-    this.group.add(floor);
-
     // Curtains (behind frame but in front of back wall).
     this.buildValance(w, h, col, topH, iyTop, innerW);
     this.buildSideCurtains(col, topH, baseH, ix, iyTop, iyBot);
@@ -236,7 +227,9 @@ export class Theater {
     const tieY = iyBot + innerH * 0.42;
 
     for (const side of [-1, 1] as const) {
-      const outX = side * ix;
+      // Extend past the opening; the frame face (at a higher z) covers
+      // the overlap and there's no perspective gap along the inner edge.
+      const outX = side * (ix + 0.3);
       const innerTop = side * (ix - drapeW * 0.8);
       const cinch = side * (ix - drapeW);
       const innerBot = side * (ix - drapeW * 0.9);
