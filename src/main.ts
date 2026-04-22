@@ -5,6 +5,7 @@ import type {
   NormalizedLandmarkList,
   LandmarkList,
 } from "@mediapipe/hands";
+import { Clawd } from "./clawd";
 import { Puppet } from "./puppet";
 import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
@@ -66,6 +67,13 @@ const puppets = puppetSpecs.map((spec) => {
   scene.add(puppet.root);
   return { ...spec, puppet, ragdoll: new Ragdoll(puppet), wasVisible: false };
 });
+
+const clawd = new Clawd();
+clawd.root.visible = false;
+scene.add(clawd.root);
+let clawdSide: HandLabel | null = null;
+let clawdRise = 0; // 0 = fully below the stage, 1 = fully risen
+let clawdSettledX = 0;
 
 function viewSize(z = 0) {
   const dist = camera.position.z - z;
@@ -385,6 +393,55 @@ function tickLoader() {
 }
 tickLoader();
 
+function updateClawd(dt: number) {
+  const leftPresent = handData.Left !== null;
+  const rightPresent = handData.Right !== null;
+  const count = (leftPresent ? 1 : 0) + (rightPresent ? 1 : 0);
+  const riseTarget = count === 1 ? 1 : 0;
+
+  // Exponential ease toward target (slightly faster on descent).
+  const tau = riseTarget > clawdRise ? 0.28 : 0.18;
+  clawdRise += (riseTarget - clawdRise) * (1 - Math.exp(-dt / tau));
+
+  // Fully hidden when settled below — stop animating, free the slot.
+  if (riseTarget === 0 && clawdRise < 0.005) {
+    clawd.root.visible = false;
+    clawdSide = null;
+    return;
+  }
+  clawd.root.visible = true;
+
+  const { w, h } = viewSize(PUPPET_Z);
+  const settledY = -h * 0.1;
+  const belowY = -h / 2 - 2.8; // offstage below the apron
+
+  // Only recompute the side and settled x while rising/present; during
+  // descent, Clawd retreats from wherever he currently stands.
+  if (count === 1) {
+    clawdSide = leftPresent ? "Right" : "Left";
+    const activeIdx = puppets.findIndex(
+      (p) => (p.hand === "Left" && leftPresent) || (p.hand === "Right" && rightPresent),
+    );
+    const active = smoothed[activeIdx]!;
+    const sideSign = Math.sign(active.x) || (clawdSide === "Right" ? 1 : -1);
+    const targetX = -sideSign * w * 0.22;
+    clawdSettledX += (targetX - clawdSettledX) * (1 - Math.exp(-dt / 0.25));
+  }
+
+  clawd.root.position.x = clawdSettledX;
+  clawd.root.position.y = belowY + (settledY - belowY) * clawdRise;
+  clawd.root.position.z = PUPPET_Z;
+  clawd.root.scale.setScalar(0.65 * PUPPET_DEPTH_SCALE);
+
+  // Glance toward the currently visible puppet (if any).
+  const activeIdx = puppets.findIndex((p) => p.puppet.root.visible);
+  const glance =
+    activeIdx >= 0
+      ? Math.max(-1, Math.min(1, (smoothed[activeIdx]!.x - clawd.root.position.x) * 0.3))
+      : 0;
+  clawd.update(dt, glance);
+}
+
 let cameraReady = false;
 let sending = false;
 let lastFrameTime = performance.now();
@@ -402,6 +459,7 @@ async function frame() {
   for (const spec of puppets) {
     if (spec.puppet.root.visible) spec.ragdoll.update(dt);
   }
+  updateClawd(dt);
   drawLandmarks();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
