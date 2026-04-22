@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Puppet Theater</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #ccc; font-family: ui-sans-serif, system-ui, sans-serif; }
+      #video {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        width: 200px;
+        height: auto;
+        transform: scaleX(-1);
+        border: 1px solid #222;
+        border-radius: 4px;
+        pointer-events: none;
+        z-index: 1;
+      }
+      #landmark-canvas {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        width: 200px;
+        height: auto;
+        border: 1px solid #222;
+        border-radius: 4px;
+        pointer-events: none;
+        z-index: 2;
+      }
+      #scene { display: block; width: 100vw; height: 100vh; position: relative; z-index: 3; }
+
+      body.debug #video {
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        border: 0;
+        border-radius: 0;
+        z-index: 0;
+      }
+      body.debug #scene { background: transparent; }
+
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        z-index: 10;
+        transition: opacity 0.4s ease-out;
+      }
+      #loader.done { opacity: 0; pointer-events: none; }
+      .loader-label {
+        margin-bottom: 18px;
+        font-size: 12px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #888;
+      }
+      .loader-track {
+        width: 280px;
+        height: 4px;
+        background: #1a1a1a;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .loader-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #d98b4f, #7fb3a0);
+        transition: width 0.15s linear;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loader">
+      <div class="loader-label">Loading puppets</div>
+      <div class="loader-track"><div class="loader-bar"></div></div>
+    </div>
+    <video id="video" playsinline></video>
+    <canvas id="landmark-canvas"></canvas>
+    <canvas id="scene"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
