@@ -1,7 +1,18 @@
 import * as THREE from "three";
 
+/**
+ * Each limb segment is a Group whose pivot sits at its top joint and whose
+ * mesh extends downward along local -Y. Rag-doll physics can drive these
+ * groups' rotations without worrying about child offsets.
+ */
 export class Puppet {
   readonly root = new THREE.Group();
+  readonly torso = new THREE.Group();
+  readonly leftShoulder = new THREE.Group();
+  readonly rightShoulder = new THREE.Group();
+  readonly leftElbow = new THREE.Group();
+  readonly rightElbow = new THREE.Group();
+
   private headGroup = new THREE.Group();
   private upperJaw = new THREE.Group();
   private lowerJaw = new THREE.Group();
@@ -47,6 +58,59 @@ export class Puppet {
     this.headGroup.add(this.upperJaw);
     this.headGroup.add(this.lowerJaw);
     this.root.add(this.headGroup);
+
+    // Torso: capsule hanging from the neck joint at y = -1 (head bottom).
+    const torsoLen = 1.4;
+    const torsoR = 0.55;
+    const torsoMesh = new THREE.Mesh(
+      new THREE.CapsuleGeometry(torsoR, torsoLen, 6, 16),
+      skin,
+    );
+    torsoMesh.position.y = -(torsoLen / 2 + torsoR);
+    this.torso.add(torsoMesh);
+    this.torso.position.set(0, -1, 0);
+    this.root.add(this.torso);
+
+    // Arms: shoulder → upper arm → elbow → lower arm → hand. Each joint
+    // group's pivot is at the top of its segment.
+    const upperLen = 0.8;
+    const upperR = 0.18;
+    const lowerLen = 0.75;
+    const lowerR = 0.15;
+
+    const buildArm = (shoulder: THREE.Group, elbow: THREE.Group, sx: number) => {
+      shoulder.position.set(sx * 0.55, -1.15, 0);
+      const upper = new THREE.Mesh(
+        new THREE.CapsuleGeometry(upperR, upperLen, 6, 12),
+        skin,
+      );
+      upper.position.y = -(upperLen / 2 + upperR);
+      shoulder.add(upper);
+
+      elbow.position.y = -(upperLen + upperR * 2);
+      shoulder.add(elbow);
+
+      const lower = new THREE.Mesh(
+        new THREE.CapsuleGeometry(lowerR, lowerLen, 6, 12),
+        skin,
+      );
+      lower.position.y = -(lowerLen / 2 + lowerR);
+      elbow.add(lower);
+
+      const hand = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 16, 12),
+        skin,
+      );
+      hand.position.y = -(lowerLen + lowerR * 2);
+      elbow.add(hand);
+
+      // Rest pose: arms drop slightly outward and forward.
+      shoulder.rotation.z = sx * 0.15;
+    };
+    buildArm(this.leftShoulder, this.leftElbow, -1);
+    buildArm(this.rightShoulder, this.rightElbow, 1);
+    this.root.add(this.leftShoulder);
+    this.root.add(this.rightShoulder);
   }
 
   setOpen(amount: number) {

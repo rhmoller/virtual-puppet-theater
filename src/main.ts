@@ -72,6 +72,12 @@ function viewSize(z = 0) {
   return { w: h * camera.aspect, h };
 }
 
+// Push puppets back in depth so the proscenium frame (at z ≈ 0.3) renders
+// in front of them. Scale compensates for perspective shrinkage.
+const PUPPET_Z = -1.5;
+const PUPPET_DEPTH_SCALE =
+  (camera.position.z - PUPPET_Z) / camera.position.z;
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -239,7 +245,7 @@ function updatePuppet(i: number) {
       x: (lm[0]!.x + lm[5]!.x + lm[9]!.x + lm[13]!.x + lm[17]!.x) / 5,
       y: (lm[0]!.y + lm[5]!.y + lm[9]!.y + lm[13]!.y + lm[17]!.y) / 5,
     };
-    const { w, h } = viewSize(0);
+    const { w, h } = viewSize(PUPPET_Z);
     const targetX = (0.5 - palmIm.x) * w;
     const targetY = (0.5 - palmIm.y) * h;
 
@@ -323,9 +329,9 @@ function updatePuppet(i: number) {
 
   const p = spec.puppet.root;
   p.visible = s.visible > 0.02;
-  p.position.set(s.x, s.y, 0);
+  p.position.set(s.x, s.y, PUPPET_Z);
   p.rotation.z = s.roll;
-  p.scale.setScalar(0.9 * Math.max(0.3, s.visible));
+  p.scale.setScalar(0.9 * PUPPET_DEPTH_SCALE * Math.max(0.3, s.visible));
   spec.puppet.setOpen(s.open);
   spec.puppet.setGaze(s.gazeX, s.gazeY);
 }
