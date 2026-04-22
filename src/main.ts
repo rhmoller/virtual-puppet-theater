@@ -340,64 +340,16 @@ hands.setOptions({
   minTrackingConfidence: 0.5,
 });
 
-const prevWrist: Record<"Left" | "Right", { x: number; y: number } | null> = {
-  Left: null,
-  Right: null,
-};
-
 hands.onResults((results: Results) => {
   handData.Left = null;
   handData.Right = null;
   if (!results.multiHandLandmarks || !results.multiHandedness) return;
-
-  type Det = {
-    lm: NormalizedLandmarkList;
-    world: LandmarkList;
-    modelLabel: "Left" | "Right";
-  };
-  const dets: Det[] = [];
   for (let i = 0; i < results.multiHandLandmarks.length; i++) {
     const lm = results.multiHandLandmarks[i];
     const world = results.multiHandWorldLandmarks?.[i];
     const label = results.multiHandedness[i]?.label as "Left" | "Right" | undefined;
-    if (lm && world && label) dets.push({ lm, world, modelLabel: label });
-  }
-
-  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return dx * dx + dy * dy;
-  };
-
-  const assign: Partial<Record<"Left" | "Right", Det>> = {};
-  if (dets.length === 2 && prevWrist.Left && prevWrist.Right) {
-    const w0 = dets[0]!.lm[0]!;
-    const w1 = dets[1]!.lm[0]!;
-    const straight = dist(w0, prevWrist.Left) + dist(w1, prevWrist.Right);
-    const swapped = dist(w1, prevWrist.Left) + dist(w0, prevWrist.Right);
-    if (straight <= swapped) {
-      assign.Left = dets[0]!;
-      assign.Right = dets[1]!;
-    } else {
-      assign.Left = dets[1]!;
-      assign.Right = dets[0]!;
-    }
-  } else if (dets.length === 1 && (prevWrist.Left || prevWrist.Right)) {
-    const w = dets[0]!.lm[0]!;
-    const dL = prevWrist.Left ? dist(w, prevWrist.Left) : Infinity;
-    const dR = prevWrist.Right ? dist(w, prevWrist.Right) : Infinity;
-    assign[dL <= dR ? "Left" : "Right"] = dets[0]!;
-  } else {
-    for (const d of dets) if (!assign[d.modelLabel]) assign[d.modelLabel] = d;
-  }
-
-  for (const side of ["Left", "Right"] as const) {
-    const d = assign[side];
-    if (d) {
-      handData[side] = { lm: d.lm, world: d.world };
-      prevWrist[side] = { x: d.lm[0]!.x, y: d.lm[0]!.y };
-    } else {
-      prevWrist[side] = null;
+    if (lm && world && label && !handData[label]) {
+      handData[label] = { lm, world };
     }
   }
 });
