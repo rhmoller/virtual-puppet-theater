@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 const GOLD = 0xc9a064;
 const GOLD_HI = 0xe3c080;
@@ -191,7 +192,9 @@ export class Theater {
 
     // Gold rope along the scalloped bottom edge (approximated by a row of
     // small gold beads stepping along the swag curve).
-    const ropeSteps = swags * 16;
+    const ropeSteps = swags * 8;
+    const beadGeoms: THREE.BufferGeometry[] = [];
+    const beadProto = new THREE.SphereGeometry(sw * 0.03, 6, 4);
     for (let i = 0; i <= ropeSteps; i++) {
       const t = i / ropeSteps;
       const x = -innerW / 2 + t * innerW;
@@ -203,13 +206,15 @@ export class Theater {
       // Match the valance's quadratic-bezier bottom edge, whose midpoint
       // sits at only d/2 below the endpoints.
       const y = iyTop - lift - 2 * d * phase * (1 - phase);
-      const bead = new THREE.Mesh(
-        new THREE.SphereGeometry(sw * 0.03, 8, 6),
-        this.mGoldHi,
-      );
-      bead.position.set(x, y, -0.1);
-      this.group.add(bead);
+      const g = beadProto.clone();
+      g.translate(x, y, -0.1);
+      beadGeoms.push(g);
     }
+    beadProto.dispose();
+    const ropeGeom = mergeGeometries(beadGeoms, false);
+    for (const g of beadGeoms) g.dispose();
+    const rope = new THREE.Mesh(ropeGeom, this.mGoldHi);
+    this.group.add(rope);
 
     // Central tassel hanging from the middle swag.
     const centerSwag = Math.floor(swags / 2);
