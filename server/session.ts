@@ -19,6 +19,7 @@ export class Session {
   private idleLevel = 0;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
+  private pendingTurns: ChatMessage[] = [];
   private puppetVisible = false;
   // Debounce rapid on/off flicker from hand-tracking dropouts.
   private puppetDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -86,7 +87,7 @@ export class Session {
   private checkIdle() {
     const silence = (Date.now() - this.lastUserActivity) / 1000;
     const next = IDLE_ESCALATION[this.idleLevel];
-    if (next && silence >= next.seconds && !this.inFlight) {
+    if (next && silence >= next.seconds) {
       this.idleLevel++;
       this.lastUserActivity = Date.now(); // reset so we don't re-fire immediately
       this.prompt({
@@ -97,17 +98,35 @@ export class Session {
     this.scheduleIdleCheck();
   }
 
-  private async prompt(turn: ChatMessage) {
+  private prompt(turn: ChatMessage) {
+    if (this.inFlight) {
+      // Collapse: queue the turn until the in-flight response commits.
+      // Multiple turns queued during one in-flight window still produce
+      // exactly one follow-up LLM call.
+      this.pendingTurns.push(turn);
+      return;
+    }
     this.history.push(turn);
     this.trimHistory();
-    if (this.inFlight) return;
+    void this.runLoop();
+  }
+
+  private async runLoop() {
     this.inFlight = true;
     try {
-      const action = await this.llm.generateAction(this.history);
-      const assistantText = renderAssistant(action);
-      this.history.push({ role: "assistant", content: assistantText });
-      this.send({ type: "action", action });
+      while (true) {
+        const action = await this.llm.generateAction(this.history);
+        const assistantText = renderAssistant(action);
+        this.history.push({ role: "assistant", content: assistantText });
+        this.send({ type: "action", action });
+        if (this.pendingTurns.length === 0) break;
+        const queued = this.pendingTurns;
+        this.pendingTurns = [];
+        for (const t of queued) this.history.push(t);
+        this.trimHistory();
+      }
     } catch (err) {
+      this.pendingTurns = [];
       console.error("[session] LLM error:", err);
       this.send({ type: "error", message: String(err) });
     } finally {
