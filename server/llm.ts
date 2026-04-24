@@ -28,9 +28,16 @@ export class AnthropicBackend implements LLMBackend {
     const response = await this.client.messages.create({
       model: MODEL,
       max_tokens: 600,
+      // System prompt + conversation prefix are stable across turns, so
+      // enabling prompt caching lets subsequent calls reuse the cached
+      // prefix (cheaper reads, lower TTFT) once the prefix is long
+      // enough — Opus 4.7 requires ≥ 4096 cacheable tokens to kick in.
+      cache_control: { type: "ephemeral" },
       system: systemParts.join("\n\n"),
       messages: turns,
       output_config: {
+        // low effort: short, structured reply, no heavy reasoning needed.
+        effort: "low",
         format: { type: "json_schema", schema: ACTION_JSON_SCHEMA.schema },
       },
     });
