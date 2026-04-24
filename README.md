@@ -2,7 +2,7 @@
 
 A virtual puppet theater that runs in your browser. Your webcam tracks your
 hand with MediaPipe and animates a puppet on stage. Opposite you, **Clawd** —
-a cheerful sock-puppet mascot — reacts to what you say and do, driven by
+a cheerful hand-puppet mascot — reacts to what you say and do, driven by
 Claude Opus 4.7.
 
 Built for the "Built with Opus" hackathon.

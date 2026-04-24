@@ -214,7 +214,7 @@ function updatePuppet(i: number) {
     const fingersTipW = v3avg(world[8]!, world[12]!, world[16]!, world[20]!);
 
     // Mouth open: angle between (thumb_tip - palm) and (fingers_tip_avg - palm).
-    // Closed sock-puppet ≈ 0.3 rad, wide open ≈ 1.4 rad.
+    // Closed hand-puppet ≈ 0.3 rad, wide open ≈ 1.4 rad.
     const tVec = v3sub(thumbTipW, palmW);
     const fVec = v3sub(fingersTipW, palmW);
     const cosA =
