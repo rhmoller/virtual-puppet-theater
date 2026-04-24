@@ -1,23 +1,11 @@
 // Wire protocol shared between the Bun server and the browser client.
 // Both sides import from this file; keep it dependency-free.
 
-export type Emotion =
-  | "neutral"
-  | "smug"
-  | "curious"
-  | "excited"
-  | "bored"
-  | "surprised";
+export type Emotion = "neutral" | "smug" | "curious" | "excited" | "bored" | "surprised";
 
 export type Gaze = "user" | "away" | "down" | "up";
 
-export type Gesture =
-  | "none"
-  | "wave"
-  | "shrug"
-  | "lean_in"
-  | "nod"
-  | "shake";
+export type Gesture = "none" | "wave" | "shrug" | "lean_in" | "nod" | "shake";
 
 export type Action = {
   say?: string;
@@ -43,7 +31,10 @@ export const ACTION_JSON_SCHEMA = {
     type: "object",
     additionalProperties: false,
     properties: {
-      say: { type: "string", description: "What Clawd says aloud. Keep it short — one or two sentences." },
+      say: {
+        type: "string",
+        description: "What Clawd says aloud. Keep it short — one or two sentences.",
+      },
       emotion: {
         type: "string",
         enum: ["neutral", "smug", "curious", "excited", "bored", "surprised"],

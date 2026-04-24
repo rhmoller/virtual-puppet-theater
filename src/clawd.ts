@@ -16,12 +16,66 @@ type EmotionParams = {
 };
 
 const EMOTIONS: Record<Emotion, EmotionParams> = {
-  neutral:   { eyeScaleY: 1.0,  rockSpeed: 1.0, rockAmp: 1.0, bodyTiltZ:  0.00, bodyOffsetZ:  0.0,  armAmp: 1.0, blinkRate: 1.0, blinkSuppress: 0 },
-  smug:      { eyeScaleY: 0.55, rockSpeed: 0.7, rockAmp: 0.9, bodyTiltZ:  0.08, bodyOffsetZ:  0.0,  armAmp: 0.8, blinkRate: 0.6, blinkSuppress: 0 },
-  curious:   { eyeScaleY: 1.10, rockSpeed: 0.9, rockAmp: 0.6, bodyTiltZ:  0.15, bodyOffsetZ:  0.0,  armAmp: 0.7, blinkRate: 1.4, blinkSuppress: 0 },
-  excited:   { eyeScaleY: 1.15, rockSpeed: 1.8, rockAmp: 1.4, bodyTiltZ:  0.00, bodyOffsetZ:  0.0,  armAmp: 1.6, blinkRate: 0.3, blinkSuppress: 0 },
-  bored:     { eyeScaleY: 0.70, rockSpeed: 0.4, rockAmp: 0.5, bodyTiltZ: -0.05, bodyOffsetZ:  0.0,  armAmp: 0.4, blinkRate: 0.3, blinkSuppress: 0 },
-  surprised: { eyeScaleY: 1.50, rockSpeed: 1.0, rockAmp: 0.2, bodyTiltZ:  0.00, bodyOffsetZ: -0.10, armAmp: 0.2, blinkRate: 1.0, blinkSuppress: 1.0 },
+  neutral: {
+    eyeScaleY: 1.0,
+    rockSpeed: 1.0,
+    rockAmp: 1.0,
+    bodyTiltZ: 0.0,
+    bodyOffsetZ: 0.0,
+    armAmp: 1.0,
+    blinkRate: 1.0,
+    blinkSuppress: 0,
+  },
+  smug: {
+    eyeScaleY: 0.55,
+    rockSpeed: 0.7,
+    rockAmp: 0.9,
+    bodyTiltZ: 0.08,
+    bodyOffsetZ: 0.0,
+    armAmp: 0.8,
+    blinkRate: 0.6,
+    blinkSuppress: 0,
+  },
+  curious: {
+    eyeScaleY: 1.1,
+    rockSpeed: 0.9,
+    rockAmp: 0.6,
+    bodyTiltZ: 0.15,
+    bodyOffsetZ: 0.0,
+    armAmp: 0.7,
+    blinkRate: 1.4,
+    blinkSuppress: 0,
+  },
+  excited: {
+    eyeScaleY: 1.15,
+    rockSpeed: 1.8,
+    rockAmp: 1.4,
+    bodyTiltZ: 0.0,
+    bodyOffsetZ: 0.0,
+    armAmp: 1.6,
+    blinkRate: 0.3,
+    blinkSuppress: 0,
+  },
+  bored: {
+    eyeScaleY: 0.7,
+    rockSpeed: 0.4,
+    rockAmp: 0.5,
+    bodyTiltZ: -0.05,
+    bodyOffsetZ: 0.0,
+    armAmp: 0.4,
+    blinkRate: 0.3,
+    blinkSuppress: 0,
+  },
+  surprised: {
+    eyeScaleY: 1.5,
+    rockSpeed: 1.0,
+    rockAmp: 0.2,
+    bodyTiltZ: 0.0,
+    bodyOffsetZ: -0.1,
+    armAmp: 0.2,
+    blinkRate: 1.0,
+    blinkSuppress: 1.0,
+  },
 };
 
 type GestureSpec = {
@@ -149,10 +203,7 @@ export class Clawd {
 
     const legSize = 0.42;
     for (const lx of [-0.9, -0.3, 0.3, 0.9]) {
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(legSize, 0.65, 0.9),
-        orange,
-      );
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(legSize, 0.65, 0.9), orange);
       leg.position.set(lx, -1.32, 0);
       this.root.add(leg);
     }
@@ -185,13 +236,13 @@ export class Clawd {
     const k = 1 - Math.exp(-dt / 0.3);
     const p = this.params;
     const tgt = this.targetParams;
-    p.eyeScaleY     += (tgt.eyeScaleY     - p.eyeScaleY)     * k;
-    p.rockSpeed     += (tgt.rockSpeed     - p.rockSpeed)     * k;
-    p.rockAmp       += (tgt.rockAmp       - p.rockAmp)       * k;
-    p.bodyTiltZ     += (tgt.bodyTiltZ     - p.bodyTiltZ)     * k;
-    p.bodyOffsetZ   += (tgt.bodyOffsetZ   - p.bodyOffsetZ)   * k;
-    p.armAmp        += (tgt.armAmp        - p.armAmp)        * k;
-    p.blinkRate     += (tgt.blinkRate     - p.blinkRate)     * k;
+    p.eyeScaleY += (tgt.eyeScaleY - p.eyeScaleY) * k;
+    p.rockSpeed += (tgt.rockSpeed - p.rockSpeed) * k;
+    p.rockAmp += (tgt.rockAmp - p.rockAmp) * k;
+    p.bodyTiltZ += (tgt.bodyTiltZ - p.bodyTiltZ) * k;
+    p.bodyOffsetZ += (tgt.bodyOffsetZ - p.bodyOffsetZ) * k;
+    p.armAmp += (tgt.armAmp - p.armAmp) * k;
+    p.blinkRate += (tgt.blinkRate - p.blinkRate) * k;
 
     // Reset bodyGroup each frame so gesture offsets don't accumulate.
     this.bodyGroup.position.set(0, 0, 0);

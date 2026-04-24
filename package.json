@@ -12,6 +12,11 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.0",
+    "@mediapipe/hands": "^0.4.1675469240",
+    "three": "^0.184.0"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/three": "^0.184.0",
@@ -19,10 +24,5 @@
     "oxlint": "^1.61.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.10"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.91.0",
-    "@mediapipe/hands": "^0.4.1675469240",
-    "three": "^0.184.0"
   }
 }

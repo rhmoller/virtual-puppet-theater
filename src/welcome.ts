@@ -19,13 +19,16 @@ export function announceWelcome() {
     utter.volume = 1.0;
     const voices = synth.getVoices();
     const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-    const MALE_NAMES = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
+    const MALE_NAMES =
+      /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
     const preferred =
       en.find((v) => MALE_NAMES.test(v.name)) ||
       en.find((v) => v.name.toLowerCase().includes("google")) ||
       en[0];
     if (preferred) utter.voice = preferred;
-    utter.onstart = () => { welcomeSpoken = true; };
+    utter.onstart = () => {
+      welcomeSpoken = true;
+    };
     synth.cancel();
     synth.speak(utter);
   };

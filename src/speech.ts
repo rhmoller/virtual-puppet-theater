@@ -6,7 +6,8 @@
 function pickClawdVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
   const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const MALE = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
+  const MALE =
+    /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
   return (
     en.find((v) => /google/i.test(v.name) && MALE.test(v.name)) ||
     en.find((v) => MALE.test(v.name)) ||
@@ -52,7 +53,12 @@ function speakNow(text: string, retry = true) {
   const voice = pickClawdVoice();
   if (voice) utter.voice = voice;
   const voiceInfo = voice
-    ? { name: voice.name, lang: voice.lang, localService: voice.localService, default: voice.default }
+    ? {
+        name: voice.name,
+        lang: voice.lang,
+        localService: voice.localService,
+        default: voice.default,
+      }
     : null;
   console.log("[tts] speak", {
     text,
@@ -118,7 +124,8 @@ export function installSpeechUnlock() {
     const utter = new SpeechSynthesisUtterance("Hello");
     utter.onstart = () => console.log("[tts-test] onstart");
     utter.onend = () => console.log("[tts-test] onend");
-    utter.onerror = (err) => console.warn("[tts-test] error:", (err as SpeechSynthesisErrorEvent).error);
+    utter.onerror = (err) =>
+      console.warn("[tts-test] error:", (err as SpeechSynthesisErrorEvent).error);
     synth.speak(utter);
     console.log("[tts-test] speak() called");
   });

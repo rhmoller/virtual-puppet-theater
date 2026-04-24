@@ -16,11 +16,31 @@ export class Theater {
   private group = new THREE.Group();
 
   private mGold = new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.35, metalness: 0.5 });
-  private mGoldHi = new THREE.MeshStandardMaterial({ color: GOLD_HI, roughness: 0.25, metalness: 0.6 });
-  private mGoldLo = new THREE.MeshStandardMaterial({ color: GOLD_LO, roughness: 0.55, metalness: 0.4 });
-  private mRed = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.85, side: THREE.DoubleSide });
-  private mRedHi = new THREE.MeshStandardMaterial({ color: RED_HI, roughness: 0.85, side: THREE.DoubleSide });
-  private mRedLo = new THREE.MeshStandardMaterial({ color: RED_LO, roughness: 0.9, side: THREE.DoubleSide });
+  private mGoldHi = new THREE.MeshStandardMaterial({
+    color: GOLD_HI,
+    roughness: 0.25,
+    metalness: 0.6,
+  });
+  private mGoldLo = new THREE.MeshStandardMaterial({
+    color: GOLD_LO,
+    roughness: 0.55,
+    metalness: 0.4,
+  });
+  private mRed = new THREE.MeshStandardMaterial({
+    color: RED,
+    roughness: 0.85,
+    side: THREE.DoubleSide,
+  });
+  private mRedHi = new THREE.MeshStandardMaterial({
+    color: RED_HI,
+    roughness: 0.85,
+    side: THREE.DoubleSide,
+  });
+  private mRedLo = new THREE.MeshStandardMaterial({
+    color: RED_LO,
+    roughness: 0.9,
+    side: THREE.DoubleSide,
+  });
   private mWood = new THREE.MeshStandardMaterial({ color: WOOD, roughness: 0.9 });
   private mWoodDark = new THREE.MeshStandardMaterial({ color: WOOD_DARK, roughness: 0.95 });
   private mBackdrop = new THREE.MeshBasicMaterial({ color: BACKDROP });
@@ -46,10 +66,7 @@ export class Theater {
     const innerW = ix * 2;
 
     // Backdrop far behind everything.
-    const backdrop = new THREE.Mesh(
-      new THREE.PlaneGeometry(w * 1.5, h * 1.5),
-      this.mBackdrop,
-    );
+    const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, h * 1.5), this.mBackdrop);
     backdrop.position.z = -4;
     this.group.add(backdrop);
 
@@ -82,8 +99,15 @@ export class Theater {
   }
 
   private buildFrame(
-    w: number, h: number, col: number, topH: number, baseH: number,
-    ix: number, iyTop: number, iyBot: number, archR: number,
+    w: number,
+    h: number,
+    col: number,
+    topH: number,
+    baseH: number,
+    ix: number,
+    iyTop: number,
+    iyBot: number,
+    archR: number,
   ) {
     // Outer rectangle with an arched opening hole.
     const outer = new THREE.Shape();
@@ -115,7 +139,7 @@ export class Theater {
       m.position.set(cx, cy, 0.35);
       this.group.add(m);
     };
-    const colPanelH = (iyTop - iyBot) - panelInset * 2;
+    const colPanelH = iyTop - iyBot - panelInset * 2;
     const colPanelW = col - panelInset * 2;
     makeInlay(-w / 2 + col / 2, (iyTop + iyBot) / 2, colPanelW, colPanelH, this.mWood);
     makeInlay(w / 2 - col / 2, (iyTop + iyBot) / 2, colPanelW, colPanelH, this.mWood);
@@ -135,8 +159,13 @@ export class Theater {
   }
 
   private buildArchBead(
-    _col: number, _topH: number, _baseH: number,
-    ix: number, iyTop: number, iyBot: number, archR: number,
+    _col: number,
+    _topH: number,
+    _baseH: number,
+    ix: number,
+    iyTop: number,
+    iyBot: number,
+    archR: number,
   ) {
     // Thin gold strip hugging the inside of the arched opening, drawn as
     // a shape = arch path thickened outward by `t`.
@@ -162,8 +191,12 @@ export class Theater {
   }
 
   private buildValance(
-    _w: number, _h: number, _col: number, topH: number,
-    iyTop: number, innerW: number,
+    _w: number,
+    _h: number,
+    _col: number,
+    topH: number,
+    iyTop: number,
+    innerW: number,
   ) {
     // Swagged valance with 5 deep scallops and a central higher point.
     const valH = topH * 1.1;
@@ -224,8 +257,12 @@ export class Theater {
   }
 
   private buildSideCurtains(
-    _col: number, _topH: number, _baseH: number,
-    ix: number, iyTop: number, iyBot: number,
+    _col: number,
+    _topH: number,
+    _baseH: number,
+    ix: number,
+    iyTop: number,
+    iyBot: number,
   ) {
     const innerH = iyTop - iyBot;
     const drapeW = Math.min(ix * 0.17, 0.9);
@@ -267,12 +304,7 @@ export class Theater {
       this.group.add(band);
 
       // Tassel hanging just below the tie-back.
-      this.tassel(
-        tbX,
-        tieY - drapeW * 0.22,
-        drapeW * 0.12,
-        0.18,
-      );
+      this.tassel(tbX, tieY - drapeW * 0.22, drapeW * 0.12, 0.18);
     }
   }
 
@@ -286,18 +318,12 @@ export class Theater {
     this.group.add(cord);
 
     // Bulb (the "head" of the tassel).
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(size * 0.25, 14, 10),
-      this.mGold,
-    );
+    const head = new THREE.Mesh(new THREE.SphereGeometry(size * 0.25, 14, 10), this.mGold);
     head.position.set(x, y, z);
     this.group.add(head);
 
     // Fringed skirt: a cone with apex at the bulb and wide base hanging down.
-    const skirt = new THREE.Mesh(
-      new THREE.ConeGeometry(size * 0.32, size * 0.8, 16),
-      this.mGoldHi,
-    );
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(size * 0.32, size * 0.8, 16), this.mGoldHi);
     skirt.position.set(x, y - size * 0.45, z);
     this.group.add(skirt);
 
@@ -311,8 +337,15 @@ export class Theater {
   }
 
   private buildOrnaments(
-    w: number, h: number, col: number, topH: number, baseH: number, _stageH: number,
-    _ix: number, _iyTop: number, _iyBot: number,
+    w: number,
+    h: number,
+    col: number,
+    topH: number,
+    baseH: number,
+    _stageH: number,
+    _ix: number,
+    _iyTop: number,
+    _iyBot: number,
   ) {
     // === Top pediment: prominent central shell. ===
     // Shell base sits at the bottom of the top frame; it rises through the
@@ -320,10 +353,7 @@ export class Theater {
     const iyTopFrame = h / 2 - topH;
     const shellR = topH * 0.95;
     const fanY = iyTopFrame + topH * 0.05;
-    const fan = new THREE.Mesh(
-      new THREE.CircleGeometry(shellR, 48, 0, Math.PI),
-      this.mGoldHi,
-    );
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(shellR, 48, 0, Math.PI), this.mGoldHi);
     fan.position.set(0, fanY, 0.52);
     this.group.add(fan);
     // Flute ridges radiating out from the boss.
@@ -341,13 +371,9 @@ export class Theater {
       this.group.add(ridge);
     }
     // Central boss at the shell's base.
-    const boss = new THREE.Mesh(
-      new THREE.SphereGeometry(shellR * 0.22, 16, 12),
-      this.mGold,
-    );
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(shellR * 0.22, 16, 12), this.mGold);
     boss.position.set(0, fanY, 0.6);
     this.group.add(boss);
-
 
     // === Column ornaments: central acanthus motif on each column face. ===
     for (const sx of [-1, 1] as const) {
@@ -365,10 +391,7 @@ export class Theater {
       this.group.add(leafMesh);
       // Small horizontal ribs at top and bottom of leaf.
       for (const ry of [-leafH / 2 - col * 0.15, leafH / 2 + col * 0.15]) {
-        const rib = new THREE.Mesh(
-          new THREE.BoxGeometry(col * 0.6, col * 0.08, 0.1),
-          this.mGold,
-        );
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(col * 0.6, col * 0.08, 0.1), this.mGold);
         rib.position.set(cx, cy + ry, 0.48);
         this.group.add(rib);
       }
@@ -404,10 +427,7 @@ export class Theater {
         new THREE.Vector2(urnW * 0.35, urnTotalH * 0.96),
         new THREE.Vector2(0.0, urnTotalH * 1.0),
       ];
-      const urn = new THREE.Mesh(
-        new THREE.LatheGeometry(urnPts, 24),
-        this.mGoldHi,
-      );
+      const urn = new THREE.Mesh(new THREE.LatheGeometry(urnPts, 24), this.mGoldHi);
       urn.position.set(cx, cy, 0.7);
       this.group.add(urn);
     }
@@ -415,17 +435,11 @@ export class Theater {
     // === Base apron central cartouche — mirror of the pediment. ===
     const baseY = -h / 2 + baseH / 2;
     const cShellR = baseH * 0.55;
-    const cShell = new THREE.Mesh(
-      new THREE.CircleGeometry(cShellR, 32, 0, Math.PI),
-      this.mGoldHi,
-    );
+    const cShell = new THREE.Mesh(new THREE.CircleGeometry(cShellR, 32, 0, Math.PI), this.mGoldHi);
     cShell.rotation.z = Math.PI; // open downward
     cShell.position.set(0, baseY + baseH * 0.1, 0.45);
     this.group.add(cShell);
-    const cBoss = new THREE.Mesh(
-      new THREE.SphereGeometry(cShellR * 0.22, 14, 10),
-      this.mGold,
-    );
+    const cBoss = new THREE.Mesh(new THREE.SphereGeometry(cShellR * 0.22, 14, 10), this.mGold);
     cBoss.position.set(0, baseY + baseH * 0.1, 0.55);
     this.group.add(cBoss);
     this.scroll(-cShellR * 1.3, baseY + baseH * 0.05, baseH * 0.3, -1);
@@ -435,10 +449,7 @@ export class Theater {
     for (const sx of [-1, 1] as const) {
       const x = sx * (w / 2 - col * 1.3);
       const y = baseY;
-      const diamond = new THREE.Mesh(
-        new THREE.CircleGeometry(baseH * 0.22, 16),
-        this.mGoldLo,
-      );
+      const diamond = new THREE.Mesh(new THREE.CircleGeometry(baseH * 0.22, 16), this.mGoldLo);
       diamond.scale.set(0.7, 1, 1);
       diamond.position.set(x, y, 0.4);
       this.group.add(diamond);
@@ -468,10 +479,7 @@ export class Theater {
     this.group.add(tail);
 
     // Inner solid eye at the center of the ring.
-    const eye = new THREE.Mesh(
-      new THREE.CircleGeometry(size * 0.12, 16),
-      this.mGold,
-    );
+    const eye = new THREE.Mesh(new THREE.CircleGeometry(size * 0.12, 16), this.mGold);
     eye.position.set(cx, cy, 0.53);
     this.group.add(eye);
   }

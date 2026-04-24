@@ -88,8 +88,7 @@ function viewSize(z = 0) {
 // Push puppets back in depth so the proscenium frame (at z ≈ 0.3) renders
 // in front of them. Scale compensates for perspective shrinkage.
 const PUPPET_Z = -1.5;
-const PUPPET_DEPTH_SCALE =
-  (camera.position.z - PUPPET_Z) / camera.position.z;
+const PUPPET_DEPTH_SCALE = (camera.position.z - PUPPET_Z) / camera.position.z;
 
 // theater.layout rebuilds ~100 merged bead geometries + curtains — too
 // expensive to run on every drag-resize event. Coalesce with a 120ms
@@ -124,13 +123,23 @@ const handData: Record<HandLabel, HandData | null> = { Left: null, Right: null }
 type GazeClass = "forward" | "left" | "right" | "up" | "down";
 
 type SmoothState = {
-  x: number; y: number; open: number;
-  gazeX: number; gazeY: number; visible: number;
+  x: number;
+  y: number;
+  open: number;
+  gazeX: number;
+  gazeY: number;
+  visible: number;
   roll: number;
   gazeClass: GazeClass;
 };
 const smoothed: SmoothState[] = puppets.map(() => ({
-  x: 0, y: 0, open: 0, gazeX: 0, gazeY: 0, visible: 0, roll: 0,
+  x: 0,
+  y: 0,
+  open: 0,
+  gazeX: 0,
+  gazeY: 0,
+  visible: 0,
+  roll: 0,
   gazeClass: "forward",
 }));
 
@@ -152,8 +161,14 @@ type V3 = { x: number; y: number; z: number };
 const v3sub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
 const v3len = (a: V3) => Math.hypot(a.x, a.y, a.z);
 const v3avg = (...ps: V3[]): V3 => {
-  let x = 0, y = 0, z = 0;
-  for (const p of ps) { x += p.x; y += p.y; z += p.z; }
+  let x = 0,
+    y = 0,
+    z = 0;
+  for (const p of ps) {
+    x += p.x;
+    y += p.y;
+    z += p.z;
+  }
   const n = ps.length;
   return { x: x / n, y: y / n, z: z / n };
 };
@@ -194,7 +209,8 @@ function updatePuppet(i: number) {
     // Closed sock-puppet ≈ 0.3 rad, wide open ≈ 1.4 rad.
     const tVec = v3sub(thumbTipW, palmW);
     const fVec = v3sub(fingersTipW, palmW);
-    const cosA = (tVec.x * fVec.x + tVec.y * fVec.y + tVec.z * fVec.z) /
+    const cosA =
+      (tVec.x * fVec.x + tVec.y * fVec.y + tVec.z * fVec.z) /
       Math.max(v3len(tVec) * v3len(fVec), 1e-5);
     const angle = Math.acos(Math.min(1, Math.max(-1, cosA)));
     // Bias toward closed: wider dead-zone at the low end, so small
@@ -225,11 +241,9 @@ function updatePuppet(i: number) {
 
     // Classify into {forward, left, right, up, down} with hysteresis.
     const ENTER = 0.45;
-    const EXIT = 0.30;
+    const EXIT = 0.3;
     const dominant = (): GazeClass =>
-      Math.abs(nxs) >= Math.abs(nys)
-        ? nxs > 0 ? "right" : "left"
-        : nys > 0 ? "up" : "down";
+      Math.abs(nxs) >= Math.abs(nys) ? (nxs > 0 ? "right" : "left") : nys > 0 ? "up" : "down";
     if (s.gazeClass === "forward") {
       if (nmag > ENTER) s.gazeClass = dominant();
     } else if (nmag < EXIT) {
@@ -393,10 +407,7 @@ async function frame() {
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
   for (let i = 0; i < puppets.length; i++) updatePuppet(i);
-  brain.notifyPuppetVisible(
-    puppets[0]!.puppet.root.visible,
-    puppets[1]!.puppet.root.visible,
-  );
+  brain.notifyPuppetVisible(puppets[0]!.puppet.root.visible, puppets[1]!.puppet.root.visible);
   for (const spec of puppets) {
     if (spec.puppet.root.visible) spec.ragdoll.update(dt);
   }
@@ -439,7 +450,9 @@ brain.start();
 // camera permission is denied or MediaPipe fails to load.
 (async () => {
   // Safety timeout so a hung init doesn't leave the user stuck on the loader.
-  const timeout = setTimeout(() => { ready = true; }, 4000);
+  const timeout = setTimeout(() => {
+    ready = true;
+  }, 4000);
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("no getUserMedia");
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });

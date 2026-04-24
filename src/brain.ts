@@ -16,7 +16,10 @@ export class Brain {
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private url: string, private handlers: Handlers) {}
+  constructor(
+    private url: string,
+    private handlers: Handlers,
+  ) {}
 
   start() {
     this.stopped = false;
@@ -46,7 +49,11 @@ export class Brain {
       this.ws = null;
     }
     if (this.stt) {
-      try { this.stt.stop(); } catch { /* not started */ }
+      try {
+        this.stt.stop();
+      } catch {
+        /* not started */
+      }
       this.stt = null;
     }
   }
@@ -120,7 +127,8 @@ export class Brain {
     if (typeof window === "undefined") return;
     const Ctor: SpeechRecognitionCtor | undefined =
       (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ??
-      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition;
+      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor })
+        .webkitSpeechRecognition;
     if (!Ctor) {
       console.warn("[brain] SpeechRecognition not available in this browser");
       return;
@@ -153,7 +161,11 @@ export class Brain {
       console.log("[stt] end");
       if (this.stopped) return;
       // Auto-restart — continuous mode ends itself periodically.
-      try { rec.start(); } catch { /* already started */ }
+      try {
+        rec.start();
+      } catch {
+        /* already started */
+      }
     };
     rec.onerror = (ev: { error?: string }) => {
       console.warn("[stt] error:", ev.error);
@@ -185,7 +197,11 @@ export class Brain {
     // Mic requires a user gesture on most browsers — arm a one-shot starter.
     const startOnGesture = () => {
       console.log("[stt] requesting start (user gesture)");
-      try { rec.start(); } catch (err) { console.log("[stt] start() threw:", err); }
+      try {
+        rec.start();
+      } catch (err) {
+        console.log("[stt] start() threw:", err);
+      }
     };
     window.addEventListener("pointerdown", startOnGesture, { once: true });
     window.addEventListener("keydown", startOnGesture, { once: true });

@@ -62,10 +62,7 @@ export class Puppet {
     // Torso: capsule hanging from the neck joint at y = -1 (head bottom).
     const torsoLen = 1.4;
     const torsoR = 0.55;
-    const torsoMesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(torsoR, torsoLen, 6, 16),
-      skin,
-    );
+    const torsoMesh = new THREE.Mesh(new THREE.CapsuleGeometry(torsoR, torsoLen, 6, 16), skin);
     torsoMesh.position.y = -(torsoLen / 2 + torsoR);
     this.torso.add(torsoMesh);
     this.torso.position.set(0, -1, 0);
@@ -80,27 +77,18 @@ export class Puppet {
 
     const buildArm = (shoulder: THREE.Group, elbow: THREE.Group, sx: number) => {
       shoulder.position.set(sx * 0.55, -1.15, 0);
-      const upper = new THREE.Mesh(
-        new THREE.CapsuleGeometry(upperR, upperLen, 6, 12),
-        skin,
-      );
+      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(upperR, upperLen, 6, 12), skin);
       upper.position.y = -(upperLen / 2 + upperR);
       shoulder.add(upper);
 
       elbow.position.y = -(upperLen + upperR * 2);
       shoulder.add(elbow);
 
-      const lower = new THREE.Mesh(
-        new THREE.CapsuleGeometry(lowerR, lowerLen, 6, 12),
-        skin,
-      );
+      const lower = new THREE.Mesh(new THREE.CapsuleGeometry(lowerR, lowerLen, 6, 12), skin);
       lower.position.y = -(lowerLen / 2 + lowerR);
       elbow.add(lower);
 
-      const hand = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 16, 12),
-        skin,
-      );
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), skin);
       hand.position.y = -(lowerLen + lowerR * 2);
       elbow.add(hand);
 

@@ -65,10 +65,7 @@ export class Ragdoll {
 
     // Anchor world positions (neck + two shoulders).
     const toWorld = (lx: number, ly: number): THREE.Vector2 =>
-      new THREE.Vector2(
-        rx + (cosR * lx - sinR * ly) * scale,
-        ry + (sinR * lx + cosR * ly) * scale,
-      );
+      new THREE.Vector2(rx + (cosR * lx - sinR * ly) * scale, ry + (sinR * lx + cosR * ly) * scale);
     const neckW = toWorld(NECK_LX, NECK_LY);
     const lsW = toWorld(-SHOULDER_LX, SHOULDER_LY);
     const rsW = toWorld(SHOULDER_LX, SHOULDER_LY);
@@ -154,14 +151,22 @@ export class Ragdoll {
     const rsA = this.puppet.rightShoulder.rotation.z;
     this.puppet.leftElbow.rotation.z =
       dirAngle(
-        this.leftElbow.cur.x, this.leftElbow.cur.y,
-        this.leftHand.cur.x, this.leftHand.cur.y,
-      ) - rootA - lsA;
+        this.leftElbow.cur.x,
+        this.leftElbow.cur.y,
+        this.leftHand.cur.x,
+        this.leftHand.cur.y,
+      ) -
+      rootA -
+      lsA;
     this.puppet.rightElbow.rotation.z =
       dirAngle(
-        this.rightElbow.cur.x, this.rightElbow.cur.y,
-        this.rightHand.cur.x, this.rightHand.cur.y,
-      ) - rootA - rsA;
+        this.rightElbow.cur.x,
+        this.rightElbow.cur.y,
+        this.rightHand.cur.x,
+        this.rightHand.cur.y,
+      ) -
+      rootA -
+      rsA;
   }
 
   private *particles(): Generator<P> {

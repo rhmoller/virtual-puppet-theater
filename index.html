@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Puppet Theater</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #ccc; font-family: ui-sans-serif, system-ui, sans-serif; }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        color: #ccc;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
       #video {
         position: fixed;
         top: 12px;
@@ -29,7 +37,13 @@
         pointer-events: none;
         z-index: 2;
       }
-      #scene { display: block; width: 100vw; height: 100vh; position: relative; z-index: 3; }
+      #scene {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+        z-index: 3;
+      }
 
       body.debug #video {
         top: 0;
@@ -41,7 +55,9 @@
         border-radius: 0;
         z-index: 0;
       }
-      body.debug #scene { background: transparent; }
+      body.debug #scene {
+        background: transparent;
+      }
 
       #loader {
         position: fixed;
@@ -54,7 +70,10 @@
         z-index: 10;
         transition: opacity 0.4s ease-out;
       }
-      #loader.done { opacity: 0; pointer-events: none; }
+      #loader.done {
+        opacity: 0;
+        pointer-events: none;
+      }
       .loader-label {
         margin-bottom: 18px;
         font-size: 12px;

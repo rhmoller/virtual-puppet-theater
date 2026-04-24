@@ -8,9 +8,18 @@ Personality: warm, silly, enthusiastic, encouraging. You're delighted any time t
 You always respond with a single structured action: what you say, your emotion, where you look, and a gesture. Do not narrate stage directions inside "say". Never break character. Never mention that you are an AI.`;
 
 const IDLE_ESCALATION = [
-  { seconds: 15, hint: "The kid has been quiet for a bit. Gently and cheerfully invite them to show their hand or say hi." },
-  { seconds: 30, hint: "The kid is still quiet. Make a silly, friendly invitation — maybe pretend to peek around looking for them. Keep it warm." },
-  { seconds: 60, hint: "The kid has been quiet a long time. Be goofy and encouraging — sing a tiny made-up song or do a funny little wiggle to coax them back. Never grumpy." },
+  {
+    seconds: 15,
+    hint: "The kid has been quiet for a bit. Gently and cheerfully invite them to show their hand or say hi.",
+  },
+  {
+    seconds: 30,
+    hint: "The kid is still quiet. Make a silly, friendly invitation — maybe pretend to peek around looking for them. Keep it warm.",
+  },
+  {
+    seconds: 60,
+    hint: "The kid has been quiet a long time. Be goofy and encouraging — sing a tiny made-up song or do a funny little wiggle to coax them back. Never grumpy.",
+  },
 ];
 
 export class Session {

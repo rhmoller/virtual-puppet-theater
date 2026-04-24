@@ -15,9 +15,7 @@ class FakeLLM implements LLMBackend {
     });
   }
 
-  resolveNext(
-    action: Action = { say: "ok", emotion: "neutral", gaze: "user", gesture: "none" },
-  ) {
+  resolveNext(action: Action = { say: "ok", emotion: "neutral", gaze: "user", gesture: "none" }) {
     const next = this.pending.shift();
     if (!next) throw new Error("FakeLLM: resolveNext called with no pending promise");
     next(action);
@@ -139,9 +137,9 @@ test("SESSION-4: idle-escalation ticks while in-flight collapse into one follow-
 
   // That follow-up's history should contain at least one idle stage note.
   const followup = llm.calls[1]!;
-  expect(
-    followup.some((m) => m.role === "user" && m.content.startsWith("[stage note:")),
-  ).toBe(true);
+  expect(followup.some((m) => m.role === "user" && m.content.startsWith("[stage note:"))).toBe(
+    true,
+  );
 
   llm.resolveNext();
   await flush();
