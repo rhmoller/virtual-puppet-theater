@@ -9,6 +9,8 @@ import { Clawd } from "./clawd";
 import { Puppet } from "./puppet";
 import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
+import { Brain } from "./brain";
+import type { Action, Gaze } from "../server/protocol.ts";
 
 declare global {
   interface Window {
@@ -74,6 +76,10 @@ scene.add(clawd.root);
 let clawdSide: HandLabel | null = null;
 let clawdRise = 0; // 0 = fully below the stage, 1 = fully risen
 let clawdSettledX = 0;
+
+// Brain-driven gaze bias: set by an incoming action, decays back to 0.
+let brainGaze = 0;
+let brainGazeWeight = 0;
 
 function viewSize(z = 0) {
   const dist = camera.position.z - z;
@@ -372,6 +378,54 @@ hands.onResults((results: Results) => {
   }
 });
 
+let welcomeSpoken = false;
+function announceWelcome() {
+  const synth = window.speechSynthesis;
+  if (!synth || welcomeSpoken) return;
+
+  const speak = () => {
+    if (welcomeSpoken) return;
+    const utter = new SpeechSynthesisUtterance(
+      "Welcome to the Virtual Puppet Theater. Turn on your webcam and use your right hand to bring your puppet to life.",
+    );
+    utter.rate = 1.0;
+    utter.pitch = 1.05;
+    utter.volume = 1.0;
+    const voices = synth.getVoices();
+    const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
+    const MALE_NAMES = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
+    const preferred =
+      en.find((v) => MALE_NAMES.test(v.name)) ||
+      en.find((v) => v.name.toLowerCase().includes("google")) ||
+      en[0];
+    if (preferred) utter.voice = preferred;
+    utter.onstart = () => { welcomeSpoken = true; };
+    synth.cancel();
+    synth.speak(utter);
+  };
+
+  const tryNow = () => {
+    if (synth.getVoices().length > 0) speak();
+    else synth.addEventListener("voiceschanged", speak, { once: true });
+  };
+
+  tryNow();
+
+  // Autoplay policy: if the utterance never started within a moment (no prior
+  // user gesture), arm one-shot gesture listeners to kick it off.
+  setTimeout(() => {
+    if (welcomeSpoken) return;
+    const onGesture = () => {
+      if (welcomeSpoken) return;
+      speak();
+    };
+    const opts = { once: true, capture: true } as const;
+    window.addEventListener("pointerdown", onGesture, opts);
+    window.addEventListener("keydown", onGesture, opts);
+    window.addEventListener("touchstart", onGesture, opts);
+  }, 600);
+}
+
 const loader = document.getElementById("loader")!;
 const loaderBar = loader.querySelector(".loader-bar") as HTMLDivElement;
 const loaderStart = performance.now();
@@ -386,7 +440,10 @@ function tickLoader() {
   if (ready && displayed > 99.5) {
     loaderBar.style.width = "100%";
     loader.classList.add("done");
-    setTimeout(() => loader.remove(), 500);
+    setTimeout(() => {
+      loader.remove();
+      announceWelcome();
+    }, 500);
     return;
   }
   requestAnimationFrame(tickLoader);
@@ -433,12 +490,15 @@ function updateClawd(dt: number) {
   clawd.root.position.z = PUPPET_Z;
   clawd.root.scale.setScalar(0.65 * PUPPET_DEPTH_SCALE);
 
-  // Glance toward the currently visible puppet (if any).
+  // Glance toward the currently visible puppet (if any), blended with
+  // whatever gaze the Brain most recently requested.
   const activeIdx = puppets.findIndex((p) => p.puppet.root.visible);
-  const glance =
+  const puppetGlance =
     activeIdx >= 0
       ? Math.max(-1, Math.min(1, (smoothed[activeIdx]!.x - clawd.root.position.x) * 0.3))
       : 0;
+  brainGazeWeight *= Math.exp(-dt / 1.2);
+  const glance = brainGaze * brainGazeWeight + puppetGlance * (1 - brainGazeWeight);
   clawd.update(dt, glance);
 }
 
@@ -456,6 +516,10 @@ async function frame() {
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
   for (let i = 0; i < puppets.length; i++) updatePuppet(i);
+  brain.notifyPuppetVisible(
+    puppets[0]!.puppet.root.visible,
+    puppets[1]!.puppet.root.visible,
+  );
   for (const spec of puppets) {
     if (spec.puppet.root.visible) spec.ragdoll.update(dt);
   }
@@ -465,6 +529,149 @@ async function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ─── Clawd voice + brain wiring ─────────────────────────────────────────────
+
+function pickClawdVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis?.getVoices() ?? [];
+  const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  const MALE = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
+  return (
+    en.find((v) => /google/i.test(v.name) && MALE.test(v.name)) ||
+    en.find((v) => MALE.test(v.name)) ||
+    en.find((v) => /google/i.test(v.name)) ||
+    en[0] ||
+    null
+  );
+}
+
+// Chrome blocks speechSynthesis.speak() until the page has had a user
+// gesture. Queue speech until then and flush on the first click/keypress.
+// Chrome also loads the voice list asynchronously — speaking before the
+// list is populated yields "synthesis-failed", so gate on that too.
+let speechUnlocked = false;
+let voicesReady = (window.speechSynthesis?.getVoices().length ?? 0) > 0;
+const pendingSpeech: string[] = [];
+
+if (window.speechSynthesis && !voicesReady) {
+  // Touching getVoices() kicks Chrome into loading them.
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+    voicesReady = (window.speechSynthesis.getVoices().length ?? 0) > 0;
+    if (voicesReady && speechUnlocked) flushPendingSpeech();
+  });
+}
+
+function flushPendingSpeech() {
+  const queued = pendingSpeech.splice(0);
+  for (const text of queued) speakNow(text);
+}
+
+function unlockSpeech() {
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  setTimeout(() => {
+    if (voicesReady) flushPendingSpeech();
+  }, 50);
+}
+window.addEventListener("pointerdown", unlockSpeech, { capture: true });
+window.addEventListener("keydown", unlockSpeech, { capture: true });
+window.addEventListener("touchstart", unlockSpeech, { capture: true });
+
+// Press "h" for a minimal TTS smoke test — bypasses the queue/gating.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "h" && e.key !== "H") return;
+  const synth = window.speechSynthesis;
+  const voices = synth?.getVoices() ?? [];
+  console.log("[tts-test] H pressed", {
+    hasSynth: !!synth,
+    voiceCount: voices.length,
+    voices: voices.map((v) => `${v.name} (${v.lang})`),
+    speaking: synth?.speaking,
+    pending: synth?.pending,
+    paused: synth?.paused,
+  });
+  if (!synth) return;
+  const utter = new SpeechSynthesisUtterance("Hello");
+  utter.onstart = () => console.log("[tts-test] onstart");
+  utter.onend = () => console.log("[tts-test] onend");
+  utter.onerror = (e) => console.warn("[tts-test] error:", (e as SpeechSynthesisErrorEvent).error);
+  synth.speak(utter);
+  console.log("[tts-test] speak() called");
+});
+
+function speakNow(text: string, retry = true) {
+  const synth = window.speechSynthesis;
+  if (!synth || !text) {
+    console.warn("[tts] skip", { hasSynth: !!synth, text });
+    return;
+  }
+  const preState = { speaking: synth.speaking, pending: synth.pending, paused: synth.paused };
+  if (synth.speaking || synth.pending) synth.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1.0;
+  utter.pitch = 0.9;
+  const voice = pickClawdVoice();
+  if (voice) utter.voice = voice;
+  const voiceInfo = voice
+    ? { name: voice.name, lang: voice.lang, localService: voice.localService, default: voice.default }
+    : null;
+  console.log("[tts] speak", {
+    text,
+    length: text.length,
+    retry,
+    rate: utter.rate,
+    pitch: utter.pitch,
+    voice: voiceInfo,
+    voiceCount: synth.getVoices().length,
+    preState,
+  });
+  utter.onstart = () => console.log("[tts] onstart", { text });
+  utter.onend = () => console.log("[tts] onend", { text });
+  utter.onerror = (e) => {
+    const err = (e as SpeechSynthesisErrorEvent).error;
+    console.warn("[tts] error:", err, { text, retry });
+    if (retry && err === "synthesis-failed") {
+      setTimeout(() => speakNow(text, false), 120);
+    }
+  };
+  synth.speak(utter);
+}
+
+function speak(text: string) {
+  if (!speechUnlocked || !voicesReady) {
+    console.log("[tts] queued:", text, { speechUnlocked, voicesReady });
+    pendingSpeech.push(text);
+    return;
+  }
+  speakNow(text);
+}
+
+const GAZE_TO_BIAS: Record<Gaze, number> = {
+  user: 0,
+  away: -0.9,
+  up: 0,
+  down: 0,
+};
+
+function applyAction(action: Action) {
+  if (action.gaze) {
+    brainGaze = GAZE_TO_BIAS[action.gaze];
+    brainGazeWeight = 1;
+  }
+  if (action.say) speak(action.say);
+  // Emotion / gesture are passed through but not yet animated.
+  if (action.emotion || action.gesture) {
+    console.debug("[clawd]", action.emotion, action.gesture);
+  }
+}
+
+const wsProto = location.protocol === "https:" ? "wss" : "ws";
+const brain = new Brain(`${wsProto}://${location.host}/ws`, {
+  onAction: applyAction,
+  onCancelSpeech: () => window.speechSynthesis?.cancel(),
+});
+brain.start();
 
 // Kick off camera + MediaPipe asynchronously so rendering isn't blocked if
 // camera permission is denied or MediaPipe fails to load.
@@ -483,4 +690,5 @@ requestAnimationFrame(frame);
   }
   clearTimeout(timeout);
   ready = true;
+  brain.markReady();
 })();

@@ -1,0 +1,185 @@
+import type { Action, ClientEvent, ServerEvent } from "../server/protocol.ts";
+
+type Handlers = {
+  onAction: (action: Action) => void;
+  onCancelSpeech: () => void;
+};
+
+export class Brain {
+  private ws: WebSocket | null = null;
+  private reconnectDelay = 500;
+  private stt: SpeechRecognitionLike | null = null;
+  private puppetState = { leftVisible: false, rightVisible: false };
+  private puppetStateDirty = false;
+  private clientReady = false;
+
+  constructor(private url: string, private handlers: Handlers) {}
+
+  start() {
+    this.connect();
+    // this.startSTT();
+    // Flush puppet-state changes at most 4×/sec.
+    setInterval(() => {
+      if (this.puppetStateDirty) {
+        this.send({ type: "puppet_state", ...this.puppetState });
+        this.puppetStateDirty = false;
+      }
+    }, 250);
+  }
+
+  markReady() {
+    if (this.clientReady) return;
+    this.clientReady = true;
+    if (this.ws?.readyState === WebSocket.OPEN) this.send({ type: "hello" });
+  }
+
+  notifyPuppetVisible(leftVisible: boolean, rightVisible: boolean) {
+    if (
+      leftVisible === this.puppetState.leftVisible &&
+      rightVisible === this.puppetState.rightVisible
+    ) {
+      return;
+    }
+    this.puppetState = { leftVisible, rightVisible };
+    this.puppetStateDirty = true;
+  }
+
+  private connect() {
+    const ws = new WebSocket(this.url);
+    this.ws = ws;
+    ws.addEventListener("open", () => {
+      this.reconnectDelay = 500;
+      if (this.clientReady) this.send({ type: "hello" });
+    });
+    ws.addEventListener("message", (ev) => {
+      let msg: ServerEvent;
+      try {
+        msg = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      console.log("[ws ←]", formatServerEvent(msg));
+      switch (msg.type) {
+        case "action":
+          this.handlers.onAction(msg.action);
+          break;
+        case "cancel_speech":
+          this.handlers.onCancelSpeech();
+          break;
+        case "error":
+          console.warn("[brain] server error:", msg.message);
+          break;
+      }
+    });
+    ws.addEventListener("close", () => {
+      this.ws = null;
+      const delay = this.reconnectDelay;
+      this.reconnectDelay = Math.min(delay * 2, 8000);
+      setTimeout(() => this.connect(), delay);
+    });
+    ws.addEventListener("error", () => ws.close());
+  }
+
+  private send(event: ClientEvent) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      console.log("[ws →]", formatClientEvent(event));
+      this.ws.send(JSON.stringify(event));
+    }
+  }
+
+  private startSTT() {
+    const Ctor: SpeechRecognitionCtor | undefined =
+      (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition;
+    if (!Ctor) {
+      console.warn("[brain] SpeechRecognition not available in this browser");
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const result = ev.results[i];
+        if (!result) continue;
+        const alt = result[0];
+        if (!alt) continue;
+        const text = alt.transcript;
+        const final = result.isFinal;
+        if (!text.trim()) continue;
+        this.send({ type: "transcript", text, final });
+        if (!final && text.trim().length > 0) {
+          this.send({ type: "user_speaking", speaking: true });
+        }
+      }
+    };
+    rec.onend = () => {
+      // Auto-restart — continuous mode ends itself periodically.
+      try { rec.start(); } catch { /* already started */ }
+    };
+    rec.onerror = (ev: { error?: string }) => {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        console.warn("[brain] mic permission denied");
+      }
+    };
+    this.stt = rec;
+
+    // Mic requires a user gesture on most browsers — arm a one-shot starter.
+    const startOnGesture = () => {
+      try { rec.start(); } catch { /* already started */ }
+    };
+    window.addEventListener("pointerdown", startOnGesture, { once: true });
+    window.addEventListener("keydown", startOnGesture, { once: true });
+  }
+}
+
+function formatClientEvent(event: ClientEvent): string {
+  switch (event.type) {
+    case "transcript":
+      return `transcript${event.final ? "(final)" : "(partial)"}: ${JSON.stringify(event.text)}`;
+    case "user_speaking":
+      return `user_speaking: ${event.speaking}`;
+    case "puppet_state":
+      return `puppet_state: L=${event.leftVisible} R=${event.rightVisible}`;
+    case "hello":
+      return "hello";
+  }
+}
+
+function formatServerEvent(event: ServerEvent): string {
+  switch (event.type) {
+    case "action": {
+      const a = event.action;
+      const meta = [a.emotion, a.gaze && `gaze=${a.gaze}`, a.gesture && `gesture=${a.gesture}`]
+        .filter(Boolean)
+        .join(" ");
+      return `action: ${JSON.stringify(a.say ?? "")}${meta ? ` [${meta}]` : ""}`;
+    }
+    case "cancel_speech":
+      return "cancel_speech";
+    case "error":
+      return `error: ${event.message}`;
+  }
+}
+
+// Minimal ambient types for Web Speech Recognition (not in lib.dom yet in all TS versions).
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((ev: { error?: string }) => void) | null;
+}
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string };
+    [index: number]: { transcript: string };
+  }>;
+}
