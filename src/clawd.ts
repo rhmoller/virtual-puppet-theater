@@ -197,11 +197,11 @@ export class Clawd {
     this.leftEye = makeEye(-1);
     this.rightEye = makeEye(1);
 
-    // Mouth: a wide black rectangle. Scale on Y animates open/close; at
-    // rest we scale down to a thin line so it reads as a closed mouth.
+    // Mouth: a wide black rectangle, only visible while Clawd is
+    // speaking. Scale on Y animates open/close; hidden entirely at rest.
     this.mouth = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.14), black);
     this.mouth.position.set(0, -0.1, 0.71);
-    this.mouth.scale.y = 0.18;
+    this.mouth.visible = false;
     this.bodyGroup.add(this.mouth);
 
     const makeArm = (sx: number) => {
@@ -289,8 +289,11 @@ export class Clawd {
     const mouthPulse = 0.5 + 0.5 * Math.sin(this.speakingT * Math.PI * 2 * 4.2);
     const mouthOpen = this.speakingEnv * mouthPulse;
     this.bodyGroup.rotation.x += mouthOpen * 0.03;
-    // Mouth shape: thin line when closed (scale 0.18), opens to full box on peak.
-    this.mouth.scale.y = 0.18 + 0.82 * mouthOpen;
+    // Mouth is hidden when not speaking; fades in/out via speakingEnv and
+    // pulses while speaking, from a thin-line base up to the full box.
+    const mouthScale = this.speakingEnv * (0.2 + 0.8 * mouthPulse);
+    this.mouth.scale.y = mouthScale;
+    this.mouth.visible = mouthScale > 0.01;
 
     // Layer active gesture on top.
     if (this.gesture !== "none") {
