@@ -5,7 +5,7 @@ import type {
   NormalizedLandmarkList,
   LandmarkList,
 } from "@mediapipe/hands";
-import { Clawd } from "./clawd";
+import { StagePuppet } from "./puppet-stage";
 import { Puppet } from "./puppet";
 import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
@@ -76,15 +76,16 @@ const puppets = puppetSpecs.map((spec) => {
   return { ...spec, puppet, ragdoll: new Ragdoll(puppet), wasVisible: false };
 });
 
-const clawd = new Clawd();
-clawd.root.visible = false;
-scene.add(clawd.root);
-let clawdSide: HandLabel | null = null;
-let clawdRise = 0; // 0 = fully below the stage, 1 = fully risen
-let clawdSettledX = 0;
+const stagePuppet = new StagePuppet();
+stagePuppet.root.visible = false;
+scene.add(stagePuppet.root);
+let stagePuppetSide: HandLabel | null = null;
+let stagePuppetRise = 0; // 0 = fully below the stage, 1 = fully risen
+let stagePuppetSettledX = 0;
 
 // Brain-driven gaze bias: set by an incoming action, decays back to 0.
-let brainGaze = 0;
+let brainGazeX = 0;
+let brainGazeY = 0;
 let brainGazeWeight = 0;
 
 function viewSize(z = 0) {
@@ -343,62 +344,63 @@ function tickLoader() {
 }
 tickLoader();
 
-function updateClawd(dt: number) {
+function updateStagePuppet(dt: number) {
   const leftPresent = handData.Left !== null;
   const rightPresent = handData.Right !== null;
   const count = (leftPresent ? 1 : 0) + (rightPresent ? 1 : 0);
-  // Clawd stays on stage unless the user brings up a second hand — then he
-  // cedes the stage so both human puppets have room.
+  // The stage puppet stays on stage unless the user brings up a second
+  // hand — then it cedes the stage so both human puppets have room.
   const riseTarget = count >= 2 ? 0 : 1;
 
   // Exponential ease toward target (slightly faster on descent).
-  const tau = riseTarget > clawdRise ? 0.28 : 0.18;
-  clawdRise += (riseTarget - clawdRise) * (1 - Math.exp(-dt / tau));
+  const tau = riseTarget > stagePuppetRise ? 0.28 : 0.18;
+  stagePuppetRise += (riseTarget - stagePuppetRise) * (1 - Math.exp(-dt / tau));
 
   // Fully hidden when settled below — stop animating, free the slot.
-  if (riseTarget === 0 && clawdRise < 0.005) {
-    clawd.root.visible = false;
-    clawdSide = null;
+  if (riseTarget === 0 && stagePuppetRise < 0.005) {
+    stagePuppet.root.visible = false;
+    stagePuppetSide = null;
     return;
   }
-  clawd.root.visible = true;
+  stagePuppet.root.visible = true;
 
   const { w, h } = viewSize(PUPPET_Z);
   const settledY = -h * 0.1;
   const belowY = -h / 2 - 2.8; // offstage below the apron
 
-  // Pick Clawd's resting side based on where the human puppet is (if any).
-  // With no hands up, default to stage-left so he has a consistent home.
+  // Pick the stage puppet's resting side based on where the human puppet
+  // is (if any). With no hands up, default to stage-left for consistency.
   if (count === 1) {
-    clawdSide = leftPresent ? "Right" : "Left";
+    stagePuppetSide = leftPresent ? "Right" : "Left";
     const activeIdx = puppets.findIndex(
       (p) => (p.hand === "Left" && leftPresent) || (p.hand === "Right" && rightPresent),
     );
     const active = smoothed[activeIdx]!;
-    const sideSign = Math.sign(active.x) || (clawdSide === "Right" ? 1 : -1);
+    const sideSign = Math.sign(active.x) || (stagePuppetSide === "Right" ? 1 : -1);
     const targetX = -sideSign * w * 0.22;
-    clawdSettledX += (targetX - clawdSettledX) * (1 - Math.exp(-dt / 0.25));
+    stagePuppetSettledX += (targetX - stagePuppetSettledX) * (1 - Math.exp(-dt / 0.25));
   } else if (count === 0) {
-    if (clawdSide === null) clawdSide = "Right";
-    const targetX = (clawdSide === "Right" ? -1 : 1) * w * 0.22;
-    clawdSettledX += (targetX - clawdSettledX) * (1 - Math.exp(-dt / 0.25));
+    if (stagePuppetSide === null) stagePuppetSide = "Right";
+    const targetX = (stagePuppetSide === "Right" ? -1 : 1) * w * 0.22;
+    stagePuppetSettledX += (targetX - stagePuppetSettledX) * (1 - Math.exp(-dt / 0.25));
   }
 
-  clawd.root.position.x = clawdSettledX;
-  clawd.root.position.y = belowY + (settledY - belowY) * clawdRise;
-  clawd.root.position.z = PUPPET_Z;
-  clawd.root.scale.setScalar(0.65 * PUPPET_DEPTH_SCALE);
+  stagePuppet.root.position.x = stagePuppetSettledX;
+  stagePuppet.root.position.y = belowY + (settledY - belowY) * stagePuppetRise;
+  stagePuppet.root.position.z = PUPPET_Z;
+  stagePuppet.root.scale.setScalar(0.65 * PUPPET_DEPTH_SCALE);
 
   // Glance toward the currently visible puppet (if any), blended with
   // whatever gaze the Brain most recently requested.
   const activeIdx = puppets.findIndex((p) => p.puppet.root.visible);
   const puppetGlance =
     activeIdx >= 0
-      ? Math.max(-1, Math.min(1, (smoothed[activeIdx]!.x - clawd.root.position.x) * 0.3))
+      ? Math.max(-1, Math.min(1, (smoothed[activeIdx]!.x - stagePuppet.root.position.x) * 0.3))
       : 0;
   brainGazeWeight *= Math.exp(-dt / 1.2);
-  const glance = brainGaze * brainGazeWeight + puppetGlance * (1 - brainGazeWeight);
-  clawd.update(dt, glance);
+  const glanceX = brainGazeX * brainGazeWeight + puppetGlance * (1 - brainGazeWeight);
+  const glanceY = brainGazeY * brainGazeWeight;
+  stagePuppet.update(dt, glanceX, glanceY);
 }
 
 let cameraReady = false;
@@ -419,7 +421,7 @@ async function frame() {
   for (const spec of puppets) {
     if (spec.puppet.root.visible) spec.ragdoll.update(dt);
   }
-  updateClawd(dt);
+  updateStagePuppet(dt);
   drawLandmarks(handData);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -429,22 +431,24 @@ requestAnimationFrame(frame);
 // Brain wiring — TTS, emotion/gesture dispatch, WebSocket.
 
 installSpeechUnlock();
-setSpeakingCallback((on) => clawd.setSpeaking(on));
+setSpeakingCallback((on) => stagePuppet.setSpeaking(on));
 
-const GAZE_TO_BIAS: Record<Gaze, number> = {
-  user: 0,
-  away: -0.9,
-  up: 0,
-  down: 0,
+const GAZE_TO_BIAS: Record<Gaze, { x: number; y: number }> = {
+  user: { x: 0, y: 0 },
+  away: { x: -0.9, y: 0 },
+  up: { x: 0, y: 1 },
+  down: { x: 0, y: -1 },
 };
 
 function applyAction(action: Action) {
   if (action.gaze) {
-    brainGaze = GAZE_TO_BIAS[action.gaze];
+    const bias = GAZE_TO_BIAS[action.gaze];
+    brainGazeX = bias.x;
+    brainGazeY = bias.y;
     brainGazeWeight = 1;
   }
-  if (action.emotion) clawd.setEmotion(action.emotion);
-  if (action.gesture) clawd.playGesture(action.gesture);
+  if (action.emotion) stagePuppet.setEmotion(action.emotion);
+  if (action.gesture) stagePuppet.playGesture(action.gesture);
   if (action.say) speak(action.say);
 }
 

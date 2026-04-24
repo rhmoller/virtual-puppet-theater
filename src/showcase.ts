@@ -1,9 +1,10 @@
-// src/showcase.ts — dev tool to verify Clawd's animations in isolation.
-// Renders Clawd alone with a side panel to trigger every emotion, gaze,
-// gesture, and the speaking toggle. Open at /showcase.html in dev.
+// src/showcase.ts — dev tool to verify the stage puppet's animations in
+// isolation. Renders the puppet alone with a side panel to trigger every
+// emotion, gaze, gesture, and the speaking toggle. Open at /showcase.html
+// in dev.
 
 import * as THREE from "three";
-import { Clawd } from "./clawd";
+import { StagePuppet } from "./puppet-stage";
 import type { Emotion, Gaze, Gesture } from "../server/protocol.ts";
 
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -29,8 +30,8 @@ const grid = new THREE.GridHelper(8, 8, 0x333333, 0x222222);
 grid.position.y = -1.9;
 scene.add(grid);
 
-const clawd = new Clawd();
-scene.add(clawd.root);
+const puppet = new StagePuppet();
+scene.add(puppet.root);
 
 function resize() {
   const w = window.innerWidth;
@@ -47,12 +48,12 @@ const EMOTIONS: Emotion[] = ["neutral", "smug", "curious", "excited", "bored", "
 const GAZES: Gaze[] = ["user", "away", "up", "down"];
 const GESTURES: Gesture[] = ["none", "wave", "shrug", "lean_in", "nod", "shake"];
 
-// Matches main.ts's GAZE_TO_BIAS — only X currently has an effect.
-const GAZE_TO_X: Record<Gaze, number> = {
-  user: 0,
-  away: -0.9,
-  up: 0,
-  down: 0,
+// Matches main.ts's GAZE_TO_BIAS.
+const GAZE_TO_BIAS: Record<Gaze, { x: number; y: number }> = {
+  user: { x: 0, y: 0 },
+  away: { x: -0.9, y: 0 },
+  up: { x: 0, y: 1 },
+  down: { x: 0, y: -1 },
 };
 
 let currentEmotion: Emotion = "neutral";
@@ -92,7 +93,7 @@ const emotionButtons = makeButtons(
   EMOTIONS,
   (e, btn) => {
     currentEmotion = e;
-    clawd.setEmotion(e);
+    puppet.setEmotion(e);
     emotionButtons.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     refreshStatus();
@@ -113,7 +114,7 @@ const gazeButtons = makeButtons(
 );
 
 makeButtons("gestures", GESTURES, (g) => {
-  clawd.playGesture(g);
+  puppet.playGesture(g);
 });
 
 const speakingButtons = makeButtons(
@@ -121,7 +122,7 @@ const speakingButtons = makeButtons(
   ["on", "off"] as const,
   (label, btn) => {
     speaking = label === "on";
-    clawd.setSpeaking(speaking);
+    puppet.setSpeaking(speaking);
     speakingButtons.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     refreshStatus();
@@ -137,7 +138,8 @@ function frame() {
   const now = performance.now();
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
-  clawd.update(dt, GAZE_TO_X[currentGaze]);
+  const bias = GAZE_TO_BIAS[currentGaze];
+  puppet.update(dt, bias.x, bias.y);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
