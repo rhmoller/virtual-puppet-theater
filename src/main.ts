@@ -10,6 +10,9 @@ import { Puppet } from "./puppet";
 import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
 import { Brain } from "./brain";
+import { drawLandmarks } from "./landmarks";
+import { speak, cancelSpeech, installSpeechUnlock } from "./speech";
+import { announceWelcome } from "./welcome";
 import type { Action, Gaze } from "../server/protocol.ts";
 
 declare global {
@@ -20,11 +23,6 @@ declare global {
 
 const video = document.getElementById("video") as HTMLVideoElement;
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
-const landmarkCanvas = document.getElementById("landmark-canvas") as HTMLCanvasElement;
-const landmarkCtx = landmarkCanvas.getContext("2d")!;
-
-landmarkCanvas.width = 200;
-landmarkCanvas.height = 150;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -108,16 +106,6 @@ resize();
 type HandData = { lm: NormalizedLandmarkList; world: LandmarkList };
 const handData: Record<HandLabel, HandData | null> = { Left: null, Right: null };
 
-const HAND_CONNECTIONS = [
-  [0,1],[1,2],[2,3],[3,4],
-  [0,5],[5,6],[6,7],[7,8],
-  [5,9],[9,10],[10,11],[11,12],
-  [9,13],[13,14],[14,15],
-  [13,17],[0,17],[17,18],[18,19],[19,20],
-  [5,9],[9,17],
-];
-const COLORS: Record<HandLabel, string> = { Left: "#d98b4f", Right: "#7fb3a0" };
-
 type GazeClass = "forward" | "left" | "right" | "up" | "down";
 
 type SmoothState = {
@@ -160,90 +148,6 @@ const wrapAngle = (a: number) => {
   return a;
 };
 
-function at<T>(arr: T[], i: number): T {
-  return arr[i] as T;
-}
-
-function drawHandLandmarks(lm: NormalizedLandmarkList, color: string) {
-  const ctx = landmarkCtx;
-  const w = landmarkCanvas.width;
-  const h = landmarkCanvas.height;
-
-  // Draw connections
-  ctx.strokeStyle = color + "99";
-  ctx.lineWidth = 1;
-  for (const conn of HAND_CONNECTIONS) {
-    const ia = conn[0] as number;
-    const ib = conn[1] as number;
-    const la = at(lm, ia);
-    const lb = at(lm, ib);
-    if (!la || !lb) continue;
-    // Mirror x only to match the horizontally-flipped video
-    const x0 = (1 - la.x) * w;
-    const y0 = la.y * h;
-    const x1 = (1 - lb.x) * w;
-    const y1 = lb.y * h;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-  }
-
-  // Draw middle finger MCP→tip (gaze direction)
-  const middleMcp = at(lm, 9);
-  const middleTip = at(lm, 12);
-  if (middleMcp && middleTip) {
-    const gx0 = (1 - middleMcp.x) * w;
-    const gy0 = middleMcp.y * h;
-    const gx1 = (1 - middleTip.x) * w;
-    const gy1 = middleTip.y * h;
-    ctx.beginPath();
-    ctx.moveTo(gx0, gy0);
-    ctx.lineTo(gx1, gy1);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-  }
-
-  // Highlight wrist, thumb tip, middle tip
-  ctx.fillStyle = color;
-  for (const idx of [0, 4, 12] as const) {
-    const pt = at(lm, idx);
-    if (!pt) continue;
-    const x = (1 - pt.x) * w;
-    const y = pt.y * h;
-    ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // Draw landmark dots
-  ctx.fillStyle = color;
-  for (const pt of lm) {
-    if (!pt) continue;
-    const x = (1 - pt.x) * w;
-    const y = pt.y * h;
-    ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function drawLandmarks() {
-  const w = landmarkCanvas.width;
-  const h = landmarkCanvas.height;
-  landmarkCtx.clearRect(0, 0, w, h);
-
-  for (const hand of ["Left", "Right"] as HandLabel[]) {
-    const data = handData[hand];
-    if (!data) continue;
-    drawHandLandmarks(data.lm, COLORS[hand]);
-  }
-}
-
 function updatePuppet(i: number) {
   const spec = puppets[i]!;
   const s = smoothed[i]!;
@@ -265,8 +169,8 @@ function updatePuppet(i: number) {
     const targetY = (0.5 - palmIm.y) * h;
 
     // World-space geometry — metric, depth-invariant.
-    const wristW = at(world, 0);
-    const thumbTipW = at(world, 4);
+    const wristW = world[0]!;
+    const thumbTipW = world[4]!;
     const mcpAvgW = v3avg(world[5]!, world[9]!, world[13]!, world[17]!);
     const palmW = v3avg(world[0]!, world[5]!, world[9]!, world[13]!, world[17]!);
     const fingersTipW = v3avg(world[8]!, world[12]!, world[16]!, world[20]!);
@@ -378,54 +282,6 @@ hands.onResults((results: Results) => {
   }
 });
 
-let welcomeSpoken = false;
-function announceWelcome() {
-  const synth = window.speechSynthesis;
-  if (!synth || welcomeSpoken) return;
-
-  const speak = () => {
-    if (welcomeSpoken) return;
-    const utter = new SpeechSynthesisUtterance(
-      "Welcome to the Virtual Puppet Theater. Turn on your webcam and use your right hand to bring your puppet to life.",
-    );
-    utter.rate = 1.0;
-    utter.pitch = 1.05;
-    utter.volume = 1.0;
-    const voices = synth.getVoices();
-    const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-    const MALE_NAMES = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
-    const preferred =
-      en.find((v) => MALE_NAMES.test(v.name)) ||
-      en.find((v) => v.name.toLowerCase().includes("google")) ||
-      en[0];
-    if (preferred) utter.voice = preferred;
-    utter.onstart = () => { welcomeSpoken = true; };
-    synth.cancel();
-    synth.speak(utter);
-  };
-
-  const tryNow = () => {
-    if (synth.getVoices().length > 0) speak();
-    else synth.addEventListener("voiceschanged", speak, { once: true });
-  };
-
-  tryNow();
-
-  // Autoplay policy: if the utterance never started within a moment (no prior
-  // user gesture), arm one-shot gesture listeners to kick it off.
-  setTimeout(() => {
-    if (welcomeSpoken) return;
-    const onGesture = () => {
-      if (welcomeSpoken) return;
-      speak();
-    };
-    const opts = { once: true, capture: true } as const;
-    window.addEventListener("pointerdown", onGesture, opts);
-    window.addEventListener("keydown", onGesture, opts);
-    window.addEventListener("touchstart", onGesture, opts);
-  }, 600);
-}
-
 const loader = document.getElementById("loader")!;
 const loaderBar = loader.querySelector(".loader-bar") as HTMLDivElement;
 const loaderStart = performance.now();
@@ -530,128 +386,15 @@ async function frame() {
     if (spec.puppet.root.visible) spec.ragdoll.update(dt);
   }
   updateClawd(dt);
-  drawLandmarks();
+  drawLandmarks(handData);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// ─── Clawd voice + brain wiring ─────────────────────────────────────────────
+// Brain wiring — TTS, emotion/gesture dispatch, WebSocket.
 
-function pickClawdVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis?.getVoices() ?? [];
-  const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const MALE = /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
-  return (
-    en.find((v) => /google/i.test(v.name) && MALE.test(v.name)) ||
-    en.find((v) => MALE.test(v.name)) ||
-    en.find((v) => /google/i.test(v.name)) ||
-    en[0] ||
-    null
-  );
-}
-
-// Chrome blocks speechSynthesis.speak() until the page has had a user
-// gesture. Queue speech until then and flush on the first click/keypress.
-// Chrome also loads the voice list asynchronously — speaking before the
-// list is populated yields "synthesis-failed", so gate on that too.
-let speechUnlocked = false;
-let voicesReady = (window.speechSynthesis?.getVoices().length ?? 0) > 0;
-const pendingSpeech: string[] = [];
-
-if (window.speechSynthesis && !voicesReady) {
-  // Touching getVoices() kicks Chrome into loading them.
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.addEventListener?.("voiceschanged", () => {
-    voicesReady = (window.speechSynthesis.getVoices().length ?? 0) > 0;
-    if (voicesReady && speechUnlocked) flushPendingSpeech();
-  });
-}
-
-function flushPendingSpeech() {
-  const queued = pendingSpeech.splice(0);
-  for (const text of queued) speakNow(text);
-}
-
-function unlockSpeech() {
-  if (speechUnlocked) return;
-  speechUnlocked = true;
-  setTimeout(() => {
-    if (voicesReady) flushPendingSpeech();
-  }, 50);
-}
-window.addEventListener("pointerdown", unlockSpeech, { capture: true });
-window.addEventListener("keydown", unlockSpeech, { capture: true });
-window.addEventListener("touchstart", unlockSpeech, { capture: true });
-
-// Press "h" for a minimal TTS smoke test — bypasses the queue/gating.
-window.addEventListener("keydown", (e) => {
-  if (e.key !== "h" && e.key !== "H") return;
-  const synth = window.speechSynthesis;
-  const voices = synth?.getVoices() ?? [];
-  console.log("[tts-test] H pressed", {
-    hasSynth: !!synth,
-    voiceCount: voices.length,
-    voices: voices.map((v) => `${v.name} (${v.lang})`),
-    speaking: synth?.speaking,
-    pending: synth?.pending,
-    paused: synth?.paused,
-  });
-  if (!synth) return;
-  const utter = new SpeechSynthesisUtterance("Hello");
-  utter.onstart = () => console.log("[tts-test] onstart");
-  utter.onend = () => console.log("[tts-test] onend");
-  utter.onerror = (e) => console.warn("[tts-test] error:", (e as SpeechSynthesisErrorEvent).error);
-  synth.speak(utter);
-  console.log("[tts-test] speak() called");
-});
-
-function speakNow(text: string, retry = true) {
-  const synth = window.speechSynthesis;
-  if (!synth || !text) {
-    console.warn("[tts] skip", { hasSynth: !!synth, text });
-    return;
-  }
-  const preState = { speaking: synth.speaking, pending: synth.pending, paused: synth.paused };
-  if (synth.speaking || synth.pending) synth.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1.0;
-  utter.pitch = 0.9;
-  const voice = pickClawdVoice();
-  if (voice) utter.voice = voice;
-  const voiceInfo = voice
-    ? { name: voice.name, lang: voice.lang, localService: voice.localService, default: voice.default }
-    : null;
-  console.log("[tts] speak", {
-    text,
-    length: text.length,
-    retry,
-    rate: utter.rate,
-    pitch: utter.pitch,
-    voice: voiceInfo,
-    voiceCount: synth.getVoices().length,
-    preState,
-  });
-  utter.onstart = () => console.log("[tts] onstart", { text });
-  utter.onend = () => console.log("[tts] onend", { text });
-  utter.onerror = (e) => {
-    const err = (e as SpeechSynthesisErrorEvent).error;
-    console.warn("[tts] error:", err, { text, retry });
-    if (retry && err === "synthesis-failed") {
-      setTimeout(() => speakNow(text, false), 120);
-    }
-  };
-  synth.speak(utter);
-}
-
-function speak(text: string) {
-  if (!speechUnlocked || !voicesReady) {
-    console.log("[tts] queued:", text, { speechUnlocked, voicesReady });
-    pendingSpeech.push(text);
-    return;
-  }
-  speakNow(text);
-}
+installSpeechUnlock();
 
 const GAZE_TO_BIAS: Record<Gaze, number> = {
   user: 0,
@@ -673,7 +416,7 @@ function applyAction(action: Action) {
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const brain = new Brain(`${wsProto}://${location.host}/ws`, {
   onAction: applyAction,
-  onCancelSpeech: () => window.speechSynthesis?.cancel(),
+  onCancelSpeech: cancelSpeech,
 });
 brain.start();
 

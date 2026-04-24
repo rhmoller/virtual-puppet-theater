@@ -83,7 +83,7 @@ No behavior change. No `console.log` gating in this item (that's follow-up work)
 **Files:** `src/main.ts`, new `src/speech.ts`, new `src/welcome.ts`, new `src/landmarks.ts`.
 
 **Success criteria:**
-- `SPLIT-1`: `main.ts` is ≤ ~400 lines.
+- `SPLIT-1`: `main.ts` is < 450 lines (originally 698). Landed at 441 — the sub-400 target was relaxed at review time to avoid forcing an extraction beyond a natural boundary.
 - `SPLIT-2`: Each new file has a single, nameable concern.
 - `SPLIT-3`: `bun run build` succeeds. App behaves identically in manual smoke test (loader → welcome line → hand raises → puppet on stage → Clawd reacts).
 
@@ -226,7 +226,7 @@ export function cancelSpeech() { window.speechSynthesis?.cancel(); }
 - `bun test` runs and passes, with tests covering `Session` collapse behavior and `Brain.stop()` lifecycle.
 - `bun run build` succeeds after every item.
 - Manual smoke test passes on the final merged branch (loader → welcome → hand → puppet → speech → reply).
-- `src/main.ts` line count drops below 450.
+- `src/main.ts` line count drops below 450 (achieved: 441, down from 698).
 - `end-to-end-mvp` tag still points at the prior commit; a new `end-to-end-mvp-hardened` tag is placed on the final commit.
 
 ## Open Questions
