@@ -1,9 +1,9 @@
 import type { ClientEvent, ServerEvent } from "./protocol.ts";
-import { LMStudioBackend } from "./llm.ts";
+import { AnthropicBackend } from "./llm.ts";
 import { Session } from "./session.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const llm = new LMStudioBackend();
+const llm = new AnthropicBackend();
 
 type SocketData = { session: Session };
 

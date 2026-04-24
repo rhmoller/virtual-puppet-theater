@@ -15,6 +15,7 @@
     "vite": "^8.0.9"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.0",
     "@mediapipe/hands": "^0.4.1675469240",
     "three": "^0.184.0"
   }
