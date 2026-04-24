@@ -6,7 +6,8 @@
     "dev": "vite --host",
     "dev:server": "bun run --hot server/index.ts",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
