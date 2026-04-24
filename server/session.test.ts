@@ -114,6 +114,49 @@ test("SESSION-3: N user turns in one in-flight window produce exactly one follow
   session.close();
 });
 
+test("SESSION-5: user_speaking during a stage-note call discards that response", async () => {
+  const llm = new FakeLLM();
+  const sent: ServerEvent[] = [];
+  const session = new Session(llm, (e) => sent.push(e));
+
+  // Constructor fires the opening stage prompt — that call is now in-flight.
+  await flush();
+  expect(llm.calls.length).toBe(1);
+
+  // User starts speaking while the stage-note call is in-flight.
+  session.handle({ type: "user_speaking", speaking: true });
+  // The server must ask the client to cut off any TTS in progress.
+  expect(sent.some((e) => e.type === "cancel_speech")).toBe(true);
+
+  // User's actual transcript arrives before the opening resolves.
+  session.handle({ type: "transcript", text: "hi there", final: true });
+
+  // Opening resolves — its action must not be sent because user_speaking
+  // flagged it stale.
+  llm.resolveNext({ say: "stale reply", emotion: "neutral", gaze: "user", gesture: "none" });
+  await flush();
+
+  expect(sent.filter((e) => e.type === "action").length).toBe(0);
+
+  // Follow-up call runs with the user's turn; the stage-note turn was
+  // rolled back from history so the model only sees the user's speech.
+  expect(llm.calls.length).toBe(2);
+  const followup = llm.calls[1]!;
+  expect(followup.some((m) => m.role === "user" && m.content === "hi there")).toBe(true);
+  expect(followup.some((m) => m.content.startsWith("[scene opens"))).toBe(false);
+
+  llm.resolveNext({ say: "hi back", emotion: "excited", gaze: "user", gesture: "wave" });
+  await flush();
+
+  const actions = sent.filter(
+    (e): e is { type: "action"; action: { say?: string } } => e.type === "action",
+  );
+  expect(actions.length).toBe(1);
+  expect(actions[0]!.action.say).toBe("hi back");
+
+  session.close();
+});
+
 test("SESSION-4: idle-escalation ticks while in-flight collapse into one follow-up", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
