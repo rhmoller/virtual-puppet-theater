@@ -91,17 +91,32 @@ const PUPPET_Z = -1.5;
 const PUPPET_DEPTH_SCALE =
   (camera.position.z - PUPPET_Z) / camera.position.z;
 
+// theater.layout rebuilds ~100 merged bead geometries + curtains — too
+// expensive to run on every drag-resize event. Coalesce with a 120ms
+// trailing call so only the settled size pays the rebuild cost.
+let theaterLayoutTimer: ReturnType<typeof setTimeout> | null = null;
+function applyTheaterLayout() {
+  theaterLayoutTimer = null;
+  const view = viewSize(0);
+  theater.layout(view.w, view.h);
+}
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  const view = viewSize(0);
-  theater.layout(view.w, view.h);
+  if (theaterLayoutTimer !== null) clearTimeout(theaterLayoutTimer);
+  theaterLayoutTimer = setTimeout(applyTheaterLayout, 120);
 }
 window.addEventListener("resize", resize);
 resize();
+// Fire the initial layout synchronously — the first rendered frame must
+// already have a stage, not wait 120ms for the trailing call.
+if (theaterLayoutTimer !== null) {
+  clearTimeout(theaterLayoutTimer);
+  applyTheaterLayout();
+}
 
 type HandData = { lm: NormalizedLandmarkList; world: LandmarkList };
 const handData: Record<HandLabel, HandData | null> = { Left: null, Right: null };
