@@ -31,6 +31,37 @@
         border-radius: 6px;
         min-width: 220px;
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+        transition: transform 0.18s ease;
+      }
+      #panel.collapsed {
+        transform: translateX(calc(-100% - 16px));
+      }
+      #toggle {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 3;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+        background: #1d1d1d;
+        color: #ccc;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: transform 0.18s ease, background 0.1s;
+      }
+      #toggle:hover {
+        background: #2a2a2a;
+      }
+      #toggle.open {
+        transform: translateX(232px);
       }
       #panel section {
         margin-bottom: 12px;
@@ -91,6 +122,7 @@
   </head>
   <body>
     <canvas id="scene"></canvas>
+    <button id="toggle" class="open" title="Toggle panel (h)">◀</button>
     <div id="panel">
       <section>
         <h2>Emotion</h2>
@@ -111,6 +143,19 @@
       </section>
       <div id="current"></div>
     </div>
+    <script>
+      const _panel = document.getElementById("panel");
+      const _toggle = document.getElementById("toggle");
+      function _setCollapsed(collapsed) {
+        _panel.classList.toggle("collapsed", collapsed);
+        _toggle.classList.toggle("open", !collapsed);
+        _toggle.textContent = collapsed ? "▶" : "◀";
+      }
+      _toggle.addEventListener("click", () => _setCollapsed(!_panel.classList.contains("collapsed")));
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "h" || e.key === "H") _setCollapsed(!_panel.classList.contains("collapsed"));
+      });
+    </script>
     <script type="module" src="/src/showcase.ts"></script>
   </body>
 </html>
