@@ -12,19 +12,43 @@ export class Brain {
   private puppetState = { leftVisible: false, rightVisible: false };
   private puppetStateDirty = false;
   private clientReady = false;
+  private stopped = false;
+  private flushInterval: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private url: string, private handlers: Handlers) {}
 
   start() {
+    this.stopped = false;
     this.connect();
     this.startSTT();
     // Flush puppet-state changes at most 4×/sec.
-    setInterval(() => {
+    this.flushInterval = setInterval(() => {
       if (this.puppetStateDirty) {
         this.send({ type: "puppet_state", ...this.puppetState });
         this.puppetStateDirty = false;
       }
     }, 250);
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.flushInterval !== null) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = null;
+    }
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    if (this.stt) {
+      try { this.stt.stop(); } catch { /* not started */ }
+      this.stt = null;
+    }
   }
 
   markReady() {
@@ -45,6 +69,7 @@ export class Brain {
   }
 
   private connect() {
+    if (this.stopped) return;
     const ws = new WebSocket(this.url);
     this.ws = ws;
     ws.addEventListener("open", () => {
@@ -73,9 +98,13 @@ export class Brain {
     });
     ws.addEventListener("close", () => {
       this.ws = null;
+      if (this.stopped) return;
       const delay = this.reconnectDelay;
       this.reconnectDelay = Math.min(delay * 2, 8000);
-      setTimeout(() => this.connect(), delay);
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connect();
+      }, delay);
     });
     ws.addEventListener("error", () => ws.close());
   }
@@ -88,6 +117,7 @@ export class Brain {
   }
 
   private startSTT() {
+    if (typeof window === "undefined") return;
     const Ctor: SpeechRecognitionCtor | undefined =
       (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ??
       (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition;
@@ -121,6 +151,7 @@ export class Brain {
     };
     rec.onend = () => {
       console.log("[stt] end");
+      if (this.stopped) return;
       // Auto-restart — continuous mode ends itself periodically.
       try { rec.start(); } catch { /* already started */ }
     };
