@@ -58,6 +58,8 @@ function formatClientEvent(event: ClientEvent): string {
       return `user_speaking: ${event.speaking}`;
     case "puppet_state":
       return `puppet_state: L=${event.leftVisible} R=${event.rightVisible}`;
+    case "voice_list":
+      return `voice_list: ${event.voices.length} voices`;
     case "hello":
       return "hello";
   }
@@ -76,6 +78,8 @@ function formatServerEvent(event: ServerEvent): string {
       return "cancel_speech";
     case "error":
       return `error: ${event.message}`;
+    case "voice_pick":
+      return `voice_pick: ${event.voiceURI}`;
   }
 }
 

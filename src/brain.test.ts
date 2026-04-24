@@ -41,7 +41,7 @@ class FakeWebSocket {
   }
 }
 
-const handlers = { onAction: () => {}, onCancelSpeech: () => {} };
+const handlers = { onAction: () => {}, onCancelSpeech: () => {}, onVoicePick: () => {} };
 
 type GlobalWithWebSocket = { WebSocket?: unknown };
 let savedWebSocket: unknown;

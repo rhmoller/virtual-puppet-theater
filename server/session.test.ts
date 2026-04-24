@@ -6,6 +6,7 @@ import type { Action, ServerEvent } from "./protocol.ts";
 class FakeLLM implements LLMBackend {
   name = "fake";
   calls: ChatMessage[][] = [];
+  voicePickCalls: number = 0;
   private pending: Array<(a: Action) => void> = [];
 
   async generateAction(messages: ChatMessage[]): Promise<Action> {
@@ -13,6 +14,11 @@ class FakeLLM implements LLMBackend {
     return new Promise<Action>((resolve) => {
       this.pending.push(resolve);
     });
+  }
+
+  async pickVoice(): Promise<string | null> {
+    this.voicePickCalls++;
+    return null;
   }
 
   resolveNext(action: Action = { say: "ok", emotion: "neutral", gaze: "user", gesture: "none" }) {

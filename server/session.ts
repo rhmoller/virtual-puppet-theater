@@ -1,4 +1,4 @@
-import type { Action, ClientEvent, ServerEvent } from "./protocol.ts";
+import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "./protocol.ts";
 import type { ChatMessage, LLMBackend } from "./llm.ts";
 
 const SYSTEM_PROMPT = `You are Clawd, a cheerful, goofy sock-puppet in a small virtual theater. A kid on a webcam brings the other puppet to life with their hand.
@@ -88,6 +88,9 @@ export class Session {
           }
         }
         break;
+      case "voice_list":
+        void this.pickVoice(event.voices);
+        break;
       case "puppet_state": {
         const visible = event.leftVisible || event.rightVisible;
         if (visible) this.noteActivity();
@@ -111,6 +114,16 @@ export class Session {
   close() {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.puppetDebounce) clearTimeout(this.puppetDebounce);
+  }
+
+  private async pickVoice(voices: VoiceInfo[]) {
+    try {
+      const voiceURI = await this.llm.pickVoice(voices);
+      if (voiceURI) this.send({ type: "voice_pick", voiceURI });
+      else console.log("[session] no suitable TTS voice picked");
+    } catch (err) {
+      console.warn("[session] voice pick failed:", err);
+    }
   }
 
   private noteActivity() {

@@ -14,16 +14,26 @@ export type Action = {
   gesture?: Gesture;
 };
 
+export type VoiceInfo = {
+  voiceURI: string;
+  name: string;
+  lang: string;
+  localService: boolean;
+  default: boolean;
+};
+
 export type ClientEvent =
   | { type: "hello" }
   | { type: "transcript"; text: string; final: boolean }
   | { type: "user_speaking"; speaking: boolean }
-  | { type: "puppet_state"; leftVisible: boolean; rightVisible: boolean };
+  | { type: "puppet_state"; leftVisible: boolean; rightVisible: boolean }
+  | { type: "voice_list"; voices: VoiceInfo[] };
 
 export type ServerEvent =
   | { type: "action"; action: Action }
   | { type: "cancel_speech" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "voice_pick"; voiceURI: string };
 
 export const ACTION_JSON_SCHEMA = {
   name: "clawd_action",

@@ -5,8 +5,22 @@
 // sequential replies so a new utterance waits for the current one to
 // finish instead of cutting it off mid-sentence.
 
+// voiceURI chosen by the server via Claude. Null until the server picks
+// (or if the pick failed / returned no suitable voice). When null we fall
+// back to the regex heuristic.
+let selectedVoiceURI: string | null = null;
+
+export function setSelectedVoice(voiceURI: string) {
+  selectedVoiceURI = voiceURI;
+  console.log("[tts] voice selected by brain:", voiceURI);
+}
+
 function pickClawdVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
+  if (selectedVoiceURI) {
+    const chosen = voices.find((v) => v.voiceURI === selectedVoiceURI);
+    if (chosen) return chosen;
+  }
   const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
   const MALE =
     /daniel|alex|fred|rishi|oliver|george|aaron|arthur|male|david|mark|james|\+m[1-7]\b/i;
@@ -17,6 +31,44 @@ function pickClawdVoice(): SpeechSynthesisVoice | null {
     en[0] ||
     null
   );
+}
+
+// Collect the browser's voice list in the serializable shape the server
+// needs. Returns null if voices aren't yet available.
+export function snapshotVoices():
+  | {
+      voiceURI: string;
+      name: string;
+      lang: string;
+      localService: boolean;
+      default: boolean;
+    }[]
+  | null {
+  const voices = window.speechSynthesis?.getVoices() ?? [];
+  if (voices.length === 0) return null;
+  return voices.map((v) => ({
+    voiceURI: v.voiceURI,
+    name: v.name,
+    lang: v.lang,
+    localService: v.localService,
+    default: v.default,
+  }));
+}
+
+// Fire `cb` once, as soon as the browser voice list is populated.
+export function onVoicesReady(cb: () => void) {
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+  if (synth.getVoices().length > 0) {
+    cb();
+    return;
+  }
+  const handler = () => {
+    if (synth.getVoices().length === 0) return;
+    synth.removeEventListener?.("voiceschanged", handler);
+    cb();
+  };
+  synth.addEventListener?.("voiceschanged", handler);
 }
 
 // Chrome blocks speechSynthesis.speak() until the page has had a user

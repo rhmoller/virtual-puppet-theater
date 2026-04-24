@@ -1,8 +1,9 @@
-import type { Action, ClientEvent, ServerEvent } from "../server/protocol.ts";
+import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "../server/protocol.ts";
 
 type Handlers = {
   onAction: (action: Action) => void;
   onCancelSpeech: () => void;
+  onVoicePick: (voiceURI: string) => void;
 };
 
 export class Brain {
@@ -15,6 +16,8 @@ export class Brain {
   private stopped = false;
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  // Voice list may arrive before the WS is open — hold and flush on open.
+  private pendingVoiceList: VoiceInfo[] | null = null;
 
   constructor(
     private url: string,
@@ -75,6 +78,18 @@ export class Brain {
     this.puppetStateDirty = true;
   }
 
+  sendVoiceList(voices: VoiceInfo[]) {
+    this.pendingVoiceList = voices;
+    this.flushVoiceList();
+  }
+
+  private flushVoiceList() {
+    if (this.pendingVoiceList && this.ws?.readyState === WebSocket.OPEN) {
+      this.send({ type: "voice_list", voices: this.pendingVoiceList });
+      this.pendingVoiceList = null;
+    }
+  }
+
   private connect() {
     if (this.stopped) return;
     const ws = new WebSocket(this.url);
@@ -82,6 +97,7 @@ export class Brain {
     ws.addEventListener("open", () => {
       this.reconnectDelay = 500;
       if (this.clientReady) this.send({ type: "hello" });
+      this.flushVoiceList();
     });
     ws.addEventListener("message", (ev) => {
       let msg: ServerEvent;
@@ -97,6 +113,9 @@ export class Brain {
           break;
         case "cancel_speech":
           this.handlers.onCancelSpeech();
+          break;
+        case "voice_pick":
+          this.handlers.onVoicePick(msg.voiceURI);
           break;
         case "error":
           console.warn("[brain] server error:", msg.message);
@@ -216,6 +235,8 @@ function formatClientEvent(event: ClientEvent): string {
       return `user_speaking: ${event.speaking}`;
     case "puppet_state":
       return `puppet_state: L=${event.leftVisible} R=${event.rightVisible}`;
+    case "voice_list":
+      return `voice_list: ${event.voices.length} voices`;
     case "hello":
       return "hello";
   }
@@ -234,6 +255,8 @@ function formatServerEvent(event: ServerEvent): string {
       return "cancel_speech";
     case "error":
       return `error: ${event.message}`;
+    case "voice_pick":
+      return `voice_pick: ${event.voiceURI}`;
   }
 }
 

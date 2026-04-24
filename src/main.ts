@@ -11,7 +11,14 @@ import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
 import { Brain } from "./brain";
 import { drawLandmarks } from "./landmarks";
-import { speak, cancelSpeech, installSpeechUnlock } from "./speech";
+import {
+  speak,
+  cancelSpeech,
+  installSpeechUnlock,
+  onVoicesReady,
+  snapshotVoices,
+  setSelectedVoice,
+} from "./speech";
 import { announceWelcome } from "./welcome";
 import type { Action, Gaze } from "../server/protocol.ts";
 
@@ -443,8 +450,16 @@ const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const brain = new Brain(`${wsProto}://${location.host}/ws`, {
   onAction: applyAction,
   onCancelSpeech: cancelSpeech,
+  onVoicePick: setSelectedVoice,
 });
 brain.start();
+
+// Ask the server (via Claude) to pick a TTS voice once the browser's
+// voice list has loaded. Brain buffers until the WS is open.
+onVoicesReady(() => {
+  const voices = snapshotVoices();
+  if (voices && voices.length > 0) brain.sendVoiceList(voices);
+});
 
 // Kick off camera + MediaPipe asynchronously so rendering isn't blocked if
 // camera permission is denied or MediaPipe fails to load.
