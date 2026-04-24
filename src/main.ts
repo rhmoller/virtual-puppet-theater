@@ -665,11 +665,9 @@ function applyAction(action: Action) {
     brainGaze = GAZE_TO_BIAS[action.gaze];
     brainGazeWeight = 1;
   }
+  if (action.emotion) clawd.setEmotion(action.emotion);
+  if (action.gesture) clawd.playGesture(action.gesture);
   if (action.say) speak(action.say);
-  // Emotion / gesture are passed through but not yet animated.
-  if (action.emotion || action.gesture) {
-    console.debug("[clawd]", action.emotion, action.gesture);
-  }
 }
 
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
