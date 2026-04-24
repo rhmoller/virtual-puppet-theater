@@ -454,7 +454,9 @@ function updateClawd(dt: number) {
   const leftPresent = handData.Left !== null;
   const rightPresent = handData.Right !== null;
   const count = (leftPresent ? 1 : 0) + (rightPresent ? 1 : 0);
-  const riseTarget = count === 1 ? 1 : 0;
+  // Clawd stays on stage unless the user brings up a second hand — then he
+  // cedes the stage so both human puppets have room.
+  const riseTarget = count >= 2 ? 0 : 1;
 
   // Exponential ease toward target (slightly faster on descent).
   const tau = riseTarget > clawdRise ? 0.28 : 0.18;
@@ -472,8 +474,8 @@ function updateClawd(dt: number) {
   const settledY = -h * 0.1;
   const belowY = -h / 2 - 2.8; // offstage below the apron
 
-  // Only recompute the side and settled x while rising/present; during
-  // descent, Clawd retreats from wherever he currently stands.
+  // Pick Clawd's resting side based on where the human puppet is (if any).
+  // With no hands up, default to stage-left so he has a consistent home.
   if (count === 1) {
     clawdSide = leftPresent ? "Right" : "Left";
     const activeIdx = puppets.findIndex(
@@ -482,6 +484,10 @@ function updateClawd(dt: number) {
     const active = smoothed[activeIdx]!;
     const sideSign = Math.sign(active.x) || (clawdSide === "Right" ? 1 : -1);
     const targetX = -sideSign * w * 0.22;
+    clawdSettledX += (targetX - clawdSettledX) * (1 - Math.exp(-dt / 0.25));
+  } else if (count === 0) {
+    if (clawdSide === null) clawdSide = "Right";
+    const targetX = (clawdSide === "Right" ? -1 : 1) * w * 0.22;
     clawdSettledX += (targetX - clawdSettledX) * (1 - Math.exp(-dt / 0.25));
   }
 
