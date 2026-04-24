@@ -17,7 +17,7 @@ export class Brain {
 
   start() {
     this.connect();
-    // this.startSTT();
+    this.startSTT();
     // Flush puppet-state changes at most 4×/sec.
     setInterval(() => {
       if (this.puppetStateDirty) {
@@ -107,6 +107,11 @@ export class Brain {
         if (!alt) continue;
         const text = alt.transcript;
         const final = result.isFinal;
+        const confidence = (alt as { confidence?: number }).confidence;
+        console.log(`[stt] ${final ? "final" : "partial"}`, {
+          text,
+          confidence,
+        });
         if (!text.trim()) continue;
         this.send({ type: "transcript", text, final });
         if (!final && text.trim().length > 0) {
@@ -115,19 +120,41 @@ export class Brain {
       }
     };
     rec.onend = () => {
+      console.log("[stt] end");
       // Auto-restart — continuous mode ends itself periodically.
       try { rec.start(); } catch { /* already started */ }
     };
     rec.onerror = (ev: { error?: string }) => {
+      console.warn("[stt] error:", ev.error);
       if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
         console.warn("[brain] mic permission denied");
       }
     };
+    // Lifecycle events not in the minimal ambient type — attach via cast.
+    const extra = rec as unknown as {
+      onstart: (() => void) | null;
+      onaudiostart: (() => void) | null;
+      onaudioend: (() => void) | null;
+      onsoundstart: (() => void) | null;
+      onsoundend: (() => void) | null;
+      onspeechstart: (() => void) | null;
+      onspeechend: (() => void) | null;
+      onnomatch: (() => void) | null;
+    };
+    extra.onstart = () => console.log("[stt] start");
+    extra.onaudiostart = () => console.log("[stt] audiostart");
+    extra.onaudioend = () => console.log("[stt] audioend");
+    extra.onsoundstart = () => console.log("[stt] soundstart");
+    extra.onsoundend = () => console.log("[stt] soundend");
+    extra.onspeechstart = () => console.log("[stt] speechstart");
+    extra.onspeechend = () => console.log("[stt] speechend");
+    extra.onnomatch = () => console.log("[stt] nomatch");
     this.stt = rec;
 
     // Mic requires a user gesture on most browsers — arm a one-shot starter.
     const startOnGesture = () => {
-      try { rec.start(); } catch { /* already started */ }
+      console.log("[stt] requesting start (user gesture)");
+      try { rec.start(); } catch (err) { console.log("[stt] start() threw:", err); }
     };
     window.addEventListener("pointerdown", startOnGesture, { once: true });
     window.addEventListener("keydown", startOnGesture, { once: true });
