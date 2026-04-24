@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clawd showcase</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111;
+        color: #ccc;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #scene {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+      }
+      #panel {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 2;
+        padding: 14px 16px;
+        background: rgba(20, 20, 20, 0.92);
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        min-width: 220px;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+      }
+      #panel section {
+        margin-bottom: 12px;
+      }
+      #panel section:last-of-type {
+        margin-bottom: 0;
+      }
+      #panel h2 {
+        margin: 0 0 6px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+        color: #7a7a7a;
+      }
+      #panel button {
+        font: inherit;
+        font-size: 12px;
+        padding: 5px 9px;
+        margin: 2px 3px 2px 0;
+        background: #1d1d1d;
+        color: #ccc;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background 0.1s,
+          border-color 0.1s;
+      }
+      #panel button:hover {
+        background: #2a2a2a;
+        border-color: #555;
+      }
+      #panel button.active {
+        background: #d67553;
+        color: #111;
+        border-color: #d67553;
+      }
+      #current {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #2a2a2a;
+        font-size: 11px;
+        color: #7a7a7a;
+        line-height: 1.55;
+      }
+      #current b {
+        color: #ccc;
+        font-weight: 500;
+      }
+      .hint {
+        margin-top: 6px;
+        font-size: 10px;
+        color: #666;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="panel">
+      <section>
+        <h2>Emotion</h2>
+        <div id="emotions"></div>
+      </section>
+      <section>
+        <h2>Gaze</h2>
+        <div id="gazes"></div>
+        <div class="hint">up / down currently have no visual effect</div>
+      </section>
+      <section>
+        <h2>Gesture</h2>
+        <div id="gestures"></div>
+        <div class="hint">gestures are one-shot — click again to replay</div>
+      </section>
+      <section>
+        <h2>Speaking</h2>
+        <div id="speaking"></div>
+      </section>
+      <div id="current"></div>
+    </div>
+    <script type="module" src="/src/showcase.ts"></script>
+  </body>
+</html>
