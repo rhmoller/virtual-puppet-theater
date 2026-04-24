@@ -18,6 +18,7 @@ import {
   onVoicesReady,
   snapshotVoices,
   setSelectedVoice,
+  setSpeakingCallback,
 } from "./speech";
 import { announceWelcome } from "./welcome";
 import type { Action, Gaze } from "../server/protocol.ts";
@@ -428,6 +429,7 @@ requestAnimationFrame(frame);
 // Brain wiring — TTS, emotion/gesture dispatch, WebSocket.
 
 installSpeechUnlock();
+setSpeakingCallback((on) => clawd.setSpeaking(on));
 
 const GAZE_TO_BIAS: Record<Gaze, number> = {
   user: 0,

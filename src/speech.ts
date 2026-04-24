@@ -85,6 +85,29 @@ const pendingSpeech: string[] = [];
 const utteranceQueue: string[] = [];
 let playing = false;
 
+// Speaking-burst callback: fires once when Clawd starts talking and once
+// when the burst drains (queue empty, nothing in flight). Used by Clawd's
+// lip-sync animation so it covers the whole burst, not just one utterance.
+type SpeakingCallback = (speaking: boolean) => void;
+let speakingCallback: SpeakingCallback | null = null;
+let burstSpeaking = false;
+
+export function setSpeakingCallback(cb: SpeakingCallback) {
+  speakingCallback = cb;
+}
+
+function startBurst() {
+  if (burstSpeaking) return;
+  burstSpeaking = true;
+  speakingCallback?.(true);
+}
+
+function endBurst() {
+  if (!burstSpeaking) return;
+  burstSpeaking = false;
+  speakingCallback?.(false);
+}
+
 if (window.speechSynthesis && !voicesReady) {
   // Touching getVoices() kicks Chrome into loading them.
   window.speechSynthesis.getVoices();
@@ -143,10 +166,14 @@ function speakNow(text: string, retry = true) {
     preState,
     queued: utteranceQueue.length,
   });
-  utter.onstart = () => console.log("[tts] onstart", { text });
+  utter.onstart = () => {
+    console.log("[tts] onstart", { text });
+    startBurst();
+  };
   utter.onend = () => {
     console.log("[tts] onend", { text });
     playing = false;
+    if (utteranceQueue.length === 0) endBurst();
     playNextUtterance();
   };
   utter.onerror = (e) => {
@@ -163,6 +190,7 @@ function speakNow(text: string, retry = true) {
       }, 120);
       return;
     }
+    if (utteranceQueue.length === 0) endBurst();
     playNextUtterance();
   };
   synth.speak(utter);
@@ -180,6 +208,7 @@ export function speak(text: string) {
 export function cancelSpeech() {
   utteranceQueue.length = 0;
   playing = false;
+  endBurst();
   window.speechSynthesis?.cancel();
 }
 

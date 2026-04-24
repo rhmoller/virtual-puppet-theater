@@ -152,6 +152,7 @@ export class Clawd {
   private leftArm: THREE.Group;
   private rightArm: THREE.Group;
   private bodyGroup: THREE.Group;
+  private mouth: THREE.Mesh;
 
   private t = Math.random() * 10;
   private nextBlink = 1.5 + Math.random() * 3;
@@ -167,6 +168,13 @@ export class Clawd {
   // One-shot gesture state.
   private gesture: Gesture = "none";
   private gestureT = 0;
+
+  // Speaking state: `speaking` toggles externally (via setSpeaking), `env`
+  // eases toward it so the mouth opens/closes smoothly on either end, and
+  // `speakingT` drives the open/close pulse.
+  private speaking = false;
+  private speakingEnv = 0;
+  private speakingT = 0;
 
   constructor() {
     const orange = new THREE.MeshStandardMaterial({ color: CLAWD_ORANGE, roughness: 0.75 });
@@ -188,6 +196,13 @@ export class Clawd {
     };
     this.leftEye = makeEye(-1);
     this.rightEye = makeEye(1);
+
+    // Mouth: a wide black rectangle. Scale on Y animates open/close; at
+    // rest we scale down to a thin line so it reads as a closed mouth.
+    this.mouth = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.14), black);
+    this.mouth.position.set(0, -0.1, 0.71);
+    this.mouth.scale.y = 0.18;
+    this.bodyGroup.add(this.mouth);
 
     const makeArm = (sx: number) => {
       const group = new THREE.Group();
@@ -226,6 +241,10 @@ export class Clawd {
     this.gestureT = 0;
   }
 
+  setSpeaking(on: boolean) {
+    this.speaking = on;
+  }
+
   /** Advance animation by dt seconds. `glanceX` (−1..1) shifts Clawd's
    *  gaze horizontally. */
   update(dt: number, glanceX = 0) {
@@ -255,9 +274,23 @@ export class Clawd {
     this.bodyGroup.rotation.z =
       Math.sin(this.t * 1.1 * p.rockSpeed) * 0.04 * p.rockAmp + p.bodyTiltZ;
 
-    // Idle arm wiggle, scaled by emotion.
-    this.leftArm.rotation.z = (Math.sin(this.t * 1.8) * 0.12 + 0.05) * p.armAmp;
-    this.rightArm.rotation.z = (Math.sin(this.t * 1.8 + Math.PI) * 0.12 - 0.05) * p.armAmp;
+    // Speaking envelope eases toward speaking/not so mouth and extra
+    // articulation transition without popping.
+    this.speakingT += dt;
+    this.speakingEnv += ((this.speaking ? 1 : 0) - this.speakingEnv) * (1 - Math.exp(-dt / 0.09));
+
+    // Idle arm wiggle, scaled by emotion plus a speaking boost so Clawd
+    // gestures a little more enthusiastically while he's talking.
+    const armAmp = p.armAmp * (1 + this.speakingEnv * 0.4);
+    this.leftArm.rotation.z = (Math.sin(this.t * 1.8) * 0.12 + 0.05) * armAmp;
+    this.rightArm.rotation.z = (Math.sin(this.t * 1.8 + Math.PI) * 0.12 - 0.05) * armAmp;
+
+    // Subtle head nod locked to the mouth pulse (extra speaking articulation).
+    const mouthPulse = 0.5 + 0.5 * Math.sin(this.speakingT * Math.PI * 2 * 4.2);
+    const mouthOpen = this.speakingEnv * mouthPulse;
+    this.bodyGroup.rotation.x += mouthOpen * 0.03;
+    // Mouth shape: thin line when closed (scale 0.18), opens to full box on peak.
+    this.mouth.scale.y = 0.18 + 0.82 * mouthOpen;
 
     // Layer active gesture on top.
     if (this.gesture !== "none") {
