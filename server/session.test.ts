@@ -106,7 +106,7 @@ test("SESSION-3: N user turns in one in-flight window produce exactly one follow
   expect(llm.calls.length).toBe(2);
 
   const followup = llm.calls[1]!;
-  const lastUser = [...followup].reverse().find((m) => m.role === "user");
+  const lastUser = followup.toReversed().find((m) => m.role === "user");
   expect(lastUser?.content).toBe("three");
 
   llm.resolveNext();

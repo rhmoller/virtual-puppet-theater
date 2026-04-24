@@ -118,7 +118,7 @@ export function installSpeechUnlock() {
     const utter = new SpeechSynthesisUtterance("Hello");
     utter.onstart = () => console.log("[tts-test] onstart");
     utter.onend = () => console.log("[tts-test] onend");
-    utter.onerror = (e) => console.warn("[tts-test] error:", (e as SpeechSynthesisErrorEvent).error);
+    utter.onerror = (err) => console.warn("[tts-test] error:", (err as SpeechSynthesisErrorEvent).error);
     synth.speak(utter);
     console.log("[tts-test] speak() called");
   });
