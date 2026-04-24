@@ -27,7 +27,7 @@ export class AnthropicBackend implements LLMBackend {
 
     const response = await this.client.messages.create({
       model: MODEL,
-      max_tokens: 400,
+      max_tokens: 600,
       system: systemParts.join("\n\n"),
       messages: turns,
       output_config: {
