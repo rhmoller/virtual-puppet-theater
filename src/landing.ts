@@ -45,6 +45,7 @@ export function showLanding(): Promise<LandingResult> {
     const sttStatus = document.getElementById("landing-stt-status") as HTMLDivElement;
     const sttText = document.getElementById("landing-stt-text") as HTMLTextAreaElement;
     const sttBtn = document.getElementById("landing-stt-btn") as HTMLButtonElement;
+    const sttTrace = document.getElementById("landing-stt-trace") as HTMLDivElement;
     const ttsBtn = document.getElementById("landing-tts-btn") as HTMLButtonElement;
     const voiceSelect = document.getElementById("landing-voice-select") as HTMLSelectElement;
 
@@ -103,6 +104,33 @@ export function showLanding(): Promise<LandingResult> {
       // start/end cycles. Same trade-off as src/brain.ts.
       rec.continuous = false;
       rec.interimResults = true;
+
+      // Diagnostic trace — surfaces which lifecycle events the recognizer
+      // actually fires. On Android Chrome, missing soundstart/speechstart
+      // narrows down whether the mic isn't capturing, the audio isn't
+      // recognized as speech, or the recognition pipeline silently failed.
+      const trace: string[] = [];
+      const logEvent = (ev: string) => {
+        trace.push(ev);
+        if (trace.length > 6) trace.shift();
+        sttTrace.textContent = trace.join(" › ");
+      };
+      const extras = rec as unknown as {
+        onaudiostart: (() => void) | null;
+        onaudioend: (() => void) | null;
+        onsoundstart: (() => void) | null;
+        onsoundend: (() => void) | null;
+        onspeechstart: (() => void) | null;
+        onspeechend: (() => void) | null;
+        onnomatch: (() => void) | null;
+      };
+      extras.onaudiostart = () => logEvent("audiostart");
+      extras.onsoundstart = () => logEvent("soundstart");
+      extras.onspeechstart = () => logEvent("speechstart");
+      extras.onspeechend = () => logEvent("speechend");
+      extras.onsoundend = () => logEvent("soundend");
+      extras.onaudioend = () => logEvent("audioend");
+      extras.onnomatch = () => logEvent("nomatch");
       // Append finalized chunks to a buffer; only re-render the tail of
       // unfinalized interim results each event. Avoids O(n²) string concat
       // as the preflight transcript grows.
@@ -110,22 +138,28 @@ export function showLanding(): Promise<LandingResult> {
       rec.onstart = () => {
         recRunning = true;
         setSttStatus("Listening — say something.", "ok");
+        logEvent("start");
       };
       rec.onresult = (ev) => {
         let interim = "";
+        let gotFinal = false;
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const r = ev.results[i];
           if (!r) continue;
           const alt = r[0];
           if (!alt?.transcript) continue;
-          if (r.isFinal) finalText += alt.transcript;
-          else interim += alt.transcript;
+          if (r.isFinal) {
+            finalText += alt.transcript;
+            gotFinal = true;
+          } else interim += alt.transcript;
         }
         sttText.value = finalText + interim;
         sttText.scrollTop = sttText.scrollHeight;
+        logEvent(gotFinal ? "result(final)" : "result(interim)");
       };
       rec.onerror = (ev) => {
         const e = ev.error;
+        logEvent(`error:${e ?? "?"}`);
         if (e === "not-allowed" || e === "service-not-allowed") {
           setSttStatus("Microphone blocked. Enable mic in browser settings.", "err");
           recRunning = false;
@@ -142,6 +176,7 @@ export function showLanding(): Promise<LandingResult> {
         }
       };
       rec.onend = () => {
+        logEvent("end");
         // Continuous mode ends each utterance on Android — auto-restart
         // only if the user actually had it running. Don't busy-loop after
         // a fatal error like denial.
