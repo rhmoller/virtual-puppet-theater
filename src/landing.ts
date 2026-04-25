@@ -21,6 +21,7 @@ interface MinimalRec {
   interimResults: boolean;
   start(): void;
   stop(): void;
+  onstart: (() => void) | null;
   onresult:
     | ((ev: {
         resultIndex: number;
@@ -43,6 +44,7 @@ export function showLanding(): Promise<LandingResult> {
     const cameraStatus = document.getElementById("landing-camera-status") as HTMLDivElement;
     const sttStatus = document.getElementById("landing-stt-status") as HTMLDivElement;
     const sttText = document.getElementById("landing-stt-text") as HTMLTextAreaElement;
+    const sttBtn = document.getElementById("landing-stt-btn") as HTMLButtonElement;
     const ttsBtn = document.getElementById("landing-tts-btn") as HTMLButtonElement;
     const voiceSelect = document.getElementById("landing-voice-select") as HTMLSelectElement;
 
@@ -89,8 +91,10 @@ export function showLanding(): Promise<LandingResult> {
       setSttStatus("Speech input needs Chrome or Edge — puppets still work without it.", "warn");
       sttText.placeholder = "Speech recognition unavailable in this browser.";
       sttText.disabled = true;
+      sttBtn.disabled = true;
+      sttBtn.textContent = "Microphone unavailable";
     } else {
-      setSttStatus("Speak — your words will appear below.", "ok");
+      setSttStatus("Tap Test microphone, then speak.", "pending");
       const rec = new Ctor();
       rec.lang = "en-US";
       rec.continuous = true;
@@ -99,6 +103,10 @@ export function showLanding(): Promise<LandingResult> {
       // unfinalized interim results each event. Avoids O(n²) string concat
       // as the preflight transcript grows.
       let finalText = "";
+      rec.onstart = () => {
+        recRunning = true;
+        setSttStatus("Listening — say something.", "ok");
+      };
       rec.onresult = (ev) => {
         let interim = "";
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -115,39 +123,44 @@ export function showLanding(): Promise<LandingResult> {
       rec.onerror = (ev) => {
         const e = ev.error;
         if (e === "not-allowed" || e === "service-not-allowed") {
-          setSttStatus("Microphone blocked. Enable mic in browser settings to talk to the AI.", "err");
+          setSttStatus("Microphone blocked. Enable mic in browser settings.", "err");
           recRunning = false;
-        } else if (e === "no-speech" || e === "aborted") {
-          // expected lulls — onend will restart
+        } else if (e === "no-speech") {
+          setSttStatus("Didn't hear anything. Tap Test microphone again.", "warn");
+        } else if (e === "audio-capture") {
+          setSttStatus("Couldn't capture audio. Check the mic is free and try again.", "err");
+        } else if (e === "network") {
+          setSttStatus("Speech service offline — check your connection.", "err");
+        } else if (e === "aborted") {
+          // benign — onend will handle
         } else {
-          console.warn("[landing] stt error:", e);
+          setSttStatus(`Microphone error: ${e ?? "unknown"}`, "err");
         }
       };
       rec.onend = () => {
-        if (!recRunning) return;
+        // Continuous mode ends each utterance on Android — auto-restart
+        // only if the user actually had it running. Don't busy-loop after
+        // a fatal error like denial.
+        if (!recRunning) {
+          setSttStatus("Microphone idle. Tap Test microphone to listen.", "pending");
+          return;
+        }
         try {
           rec.start();
         } catch {
-          /* already running */
+          recRunning = false;
         }
       };
-      // Mic requires a user gesture to actually start in some browsers.
-      // Try immediately; if it throws (no gesture yet), arm a one-shot.
-      const tryStart = () => {
-        try {
-          rec.start();
-          recRunning = true;
-        } catch {
-          /* needs gesture */
-        }
-      };
-      tryStart();
-      const armOnGesture = () => {
+      sttBtn.addEventListener("click", () => {
         if (recRunning) return;
-        tryStart();
-      };
-      window.addEventListener("pointerdown", armOnGesture, { once: true, capture: true });
-      window.addEventListener("keydown", armOnGesture, { once: true, capture: true });
+        try {
+          rec.start();
+          // recRunning is set in onstart so we don't lie if start fails async.
+          setSttStatus("Starting microphone…", "pending");
+        } catch (err) {
+          setSttStatus(`Couldn't start microphone: ${(err as Error).message}`, "err");
+        }
+      });
       landingRec = rec;
     }
 
