@@ -265,6 +265,8 @@ async function frame() {
     view,
     userControllers.map((c) => ({ visible: c.visible, state: c.state, hand: c.hand })),
   );
+  // Drive cosmetic / scene-prop fade-in/out animations.
+  sceneController.update(dt);
 
   drawLandmarks(handData);
   renderer.render(scene, camera);
