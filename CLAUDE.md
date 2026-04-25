@@ -33,3 +33,7 @@ Created for the "Built with Opus" hackathon.
 ## Commit
 
 Use conventional commit messages. Don't mix unrelated changes into one changeset.
+
+## Deploy
+
+Never deploy unless explicitly requested. No `flyctl deploy`, no production pushes, no live-site changes without a clear instruction in the current request. "Build", "test", "ship", "land" are not deploy authorizations on their own.
