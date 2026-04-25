@@ -12,7 +12,6 @@ export class Hud {
   private aiDot: HTMLSpanElement;
   private banner: HTMLDivElement;
   private toasts: HTMLDivElement;
-  private bannerTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     const root = document.createElement("div");
@@ -75,10 +74,6 @@ export class Hud {
   private showBanner(text: string) {
     this.banner.textContent = text;
     this.banner.hidden = false;
-    if (this.bannerTimer !== null) {
-      clearTimeout(this.bannerTimer);
-      this.bannerTimer = null;
-    }
   }
   private hideBanner() {
     this.banner.hidden = true;

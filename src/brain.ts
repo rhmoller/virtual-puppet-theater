@@ -178,6 +178,9 @@ export class Brain {
     let sttBackoff = 500;
 
     rec.onresult = (ev) => {
+      // Successful results prove the recognizer is healthy — clear any
+      // backoff accumulated by prior transient errors.
+      sttBackoff = 500;
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const result = ev.results[i];
         if (!result) continue;
@@ -244,10 +247,10 @@ export class Brain {
       if (!micDenied) this.handlers.onMicState?.("listening");
     };
     extra.onaudiostart = () => console.log("[stt] audiostart");
-    extra.onaudioend = () => {
-      console.log("[stt] audioend");
-      if (!micDenied) this.handlers.onMicState?.("idle");
-    };
+    // audioend fires on every speech pause in continuous mode — too noisy
+    // to expose as a UI state. The mic indicator stays "listening" until a
+    // hard error or denial.
+    extra.onaudioend = () => console.log("[stt] audioend");
     extra.onsoundstart = () => console.log("[stt] soundstart");
     extra.onsoundend = () => console.log("[stt] soundend");
     extra.onspeechstart = () => console.log("[stt] speechstart");
@@ -255,24 +258,15 @@ export class Brain {
     extra.onnomatch = () => console.log("[stt] nomatch");
     this.stt = rec;
 
-    // Mic requires a user gesture on most browsers — arm a one-shot starter.
-    // The landing page's Start button satisfies this gesture.
-    const startOnGesture = () => {
-      if (micDenied) return;
-      console.log("[stt] requesting start (user gesture)");
-      try {
-        rec.start();
-      } catch (err) {
-        console.log("[stt] start() threw:", err);
-      }
-    };
-    // Try immediately — if Brain is started after the user has already
-    // interacted (e.g. via the landing's Start button), this just works.
+    // Brain is only constructed/started after the landing page's Start
+    // button — which is the user gesture browsers require. So rec.start()
+    // can run immediately. Any "not-allowed" failure surfaces async via
+    // onerror, which marks the mic denied; no fallback gesture listener
+    // is needed (and start() doesn't throw synchronously on that path).
     try {
       rec.start();
-    } catch {
-      window.addEventListener("pointerdown", startOnGesture, { once: true });
-      window.addEventListener("keydown", startOnGesture, { once: true });
+    } catch (err) {
+      console.log("[stt] start() threw:", err);
     }
   }
 }

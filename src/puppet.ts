@@ -93,13 +93,10 @@ export class Puppet {
     bangs.position.set(0, 0.7, 0.62);
     this.upperJaw.add(bangs);
 
-    for (const [side, eyeGroup] of [
-      [-1, this.leftEye],
-      [+1, this.rightEye],
-    ] as const) {
+    const makeEye = (side: number, eyeGroup: THREE.Group) => {
       eyeGroup.position.set(side * 0.4, 0.45, 0.78);
-      const w = new THREE.Mesh(new THREE.SphereGeometry(0.22, 22, 18), eyeWhite);
-      eyeGroup.add(w);
+      const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 22, 18), eyeWhite);
+      eyeGroup.add(eyeMesh);
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 12), dark);
       pupil.position.set(0, 0, 0.16);
       eyeGroup.add(pupil);
@@ -111,7 +108,14 @@ export class Puppet {
       brow.position.set(side * 0.42, 0.74, 0.84);
       brow.rotation.z = side * -0.18;
       this.upperJaw.add(brow);
-    }
+      return { eyeMesh, pupil };
+    };
+    const left = makeEye(-1, this.leftEye);
+    const right = makeEye(1, this.rightEye);
+    this.leftEyeMesh = left.eyeMesh;
+    this.rightEyeMesh = right.eyeMesh;
+    this.leftPupil = left.pupil;
+    this.rightPupil = right.pupil;
 
     // Nose — a small skin-colored sphere just above the mouth line.
     const nose = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), skin);
@@ -198,11 +202,6 @@ export class Puppet {
     buildArm(this.rightShoulder, this.rightElbow, 1);
     this.root.add(this.leftShoulder);
     this.root.add(this.rightShoulder);
-
-    this.leftEyeMesh = this.leftEye.children[0] as THREE.Mesh;
-    this.rightEyeMesh = this.rightEye.children[0] as THREE.Mesh;
-    this.leftPupil = this.leftEye.children[1] as THREE.Mesh;
-    this.rightPupil = this.rightEye.children[1] as THREE.Mesh;
   }
 
   setOpen(amount: number) {

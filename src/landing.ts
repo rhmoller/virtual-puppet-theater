@@ -21,7 +21,12 @@ interface MinimalRec {
   interimResults: boolean;
   start(): void;
   stop(): void;
-  onresult: ((ev: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null;
+  onresult:
+    | ((ev: {
+        resultIndex: number;
+        results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>;
+      }) => void)
+    | null;
   onerror: ((ev: { error?: string }) => void) | null;
   onend: (() => void) | null;
 }
@@ -62,7 +67,8 @@ export function showLanding(): Promise<LandingResult> {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("no getUserMedia");
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
         camPreview.srcObject = stream;
-        await camPreview.play().catch(() => {});
+        // Fire-and-forget — a hung play() must not block the Start button.
+        camPreview.play().catch(() => {});
         setCameraStatus("Camera ready", "ok");
       } catch (err) {
         console.warn("[landing] camera error:", err);
@@ -89,14 +95,21 @@ export function showLanding(): Promise<LandingResult> {
       rec.lang = "en-US";
       rec.continuous = true;
       rec.interimResults = true;
+      // Append finalized chunks to a buffer; only re-render the tail of
+      // unfinalized interim results each event. Avoids O(n²) string concat
+      // as the preflight transcript grows.
+      let finalText = "";
       rec.onresult = (ev) => {
-        let composed = "";
-        for (let i = 0; i < ev.results.length; i++) {
+        let interim = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const r = ev.results[i];
-          const alt = r?.[0];
-          if (alt?.transcript) composed += alt.transcript;
+          if (!r) continue;
+          const alt = r[0];
+          if (!alt?.transcript) continue;
+          if (r.isFinal) finalText += alt.transcript;
+          else interim += alt.transcript;
         }
-        sttText.value = composed;
+        sttText.value = finalText + interim;
         sttText.scrollTop = sttText.scrollHeight;
       };
       rec.onerror = (ev) => {
@@ -188,21 +201,45 @@ export function showLanding(): Promise<LandingResult> {
     });
 
     // ---- Start ----
+    // Brain.start() will create its own SpeechRecognition. Chrome only
+    // allows one active recognizer per page, so we must wait for the
+    // landing recognizer's onend (the real "I'm done" signal) before
+    // resolving — otherwise Brain's start() races the landing's stop()
+    // and silently fails with InvalidStateError.
     startBtn.addEventListener(
       "click",
       () => {
+        root.classList.add("hidden");
+
+        let resolved = false;
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          setTimeout(() => root.remove(), 400);
+          resolve({ stream, userPickedVoiceURI });
+        };
+
         if (landingRec) {
           recRunning = false;
-          try {
-            landingRec.stop();
-          } catch {
-            /* not running */
-          }
+          const rec = landingRec;
           landingRec = null;
+          // Replace handlers so the existing onend restart path doesn't fire.
+          rec.onresult = null;
+          rec.onerror = null;
+          rec.onend = finish;
+          try {
+            rec.stop();
+          } catch {
+            // Wasn't actually running; resolve straight away.
+            finish();
+            return;
+          }
+          // Safety net — some browsers may not fire onend on an already-
+          // stopped recognizer. Cap the wait so Start always proceeds.
+          setTimeout(finish, 600);
+        } else {
+          finish();
         }
-        root.classList.add("hidden");
-        setTimeout(() => root.remove(), 400);
-        resolve({ stream, userPickedVoiceURI });
       },
       { once: true },
     );

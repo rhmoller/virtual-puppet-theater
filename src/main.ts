@@ -461,7 +461,6 @@ const brain = new Brain(`${wsProto}://${location.host}/ws`, {
   onConnection: (state) => hud.setConnection(state),
   onMicState: (state) => {
     if (state === "listening") hud.setMic("ok", "Microphone listening");
-    else if (state === "idle") hud.setMic("warn", "Microphone armed (silent)");
     else if (state === "denied") hud.setMic("err", "Microphone blocked — enable it in your browser");
     else if (state === "unsupported") hud.setMic("err", "Speech input needs Chrome or Edge");
     else hud.setMic("err", "Microphone error");
@@ -488,7 +487,6 @@ showLanding().then(async ({ stream, userPickedVoiceURI }) => {
     setSelectedVoice(userPickedVoiceURI);
   }
 
-  hud.setConnection("reconnecting");
   brain.start();
   onVoicesReady(() => {
     const voices = snapshotVoices();
