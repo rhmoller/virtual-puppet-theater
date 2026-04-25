@@ -97,7 +97,11 @@ export function showLanding(): Promise<LandingResult> {
       setSttStatus("Tap Test microphone, then speak.", "pending");
       const rec = new Ctor();
       rec.lang = "en-US";
-      rec.continuous = true;
+      // Android Chrome silently drops onresult when continuous=true.
+      // Keep single-utterance mode and let onend auto-restart between
+      // turns; behavior on desktop is equivalent, just with more
+      // start/end cycles. Same trade-off as src/brain.ts.
+      rec.continuous = false;
       rec.interimResults = true;
       // Append finalized chunks to a buffer; only re-render the tail of
       // unfinalized interim results each event. Avoids O(n²) string concat

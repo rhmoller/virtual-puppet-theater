@@ -170,7 +170,10 @@ export class Brain {
     }
     const rec = new Ctor();
     rec.lang = "en-US";
-    rec.continuous = true;
+    // Android Chrome silently drops onresult when continuous=true. Use
+    // single-utterance mode; onend auto-restarts so the perceived
+    // behavior on desktop is the same.
+    rec.continuous = false;
     rec.interimResults = true;
 
     // Permanent denial after permission errors — stop trying to restart.
