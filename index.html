@@ -184,6 +184,46 @@
       #landing-start:hover:not(:disabled) {
         filter: brightness(1.08);
       }
+      .brain-row {
+        display: flex;
+        gap: 8px;
+      }
+      .brain-pill {
+        flex: 1;
+        background: #1c1924;
+        color: #e8e3d8;
+        border: 1px solid #38323f;
+        border-radius: 6px;
+        padding: 9px 12px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        text-align: left;
+        line-height: 1.35;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .brain-pill:hover {
+        background: #26222e;
+        border-color: #4a424f;
+      }
+      .brain-pill.active {
+        border-color: #d98b4f;
+        background: #2a1f1c;
+      }
+      .brain-pill-title {
+        display: block;
+        font-weight: 600;
+        color: #f1d8b8;
+      }
+      .brain-pill-sub {
+        display: block;
+        font-size: 10px;
+        color: #8d839b;
+        margin-top: 2px;
+      }
+      .brain-pill.active .brain-pill-sub {
+        color: #b8a48a;
+      }
 
       /* ---------- HUD ---------- */
       #hud {
@@ -304,6 +344,32 @@
             <select id="landing-voice-select" class="landing-select" aria-label="AI puppet voice">
               <option value="">Auto (AI picks)</option>
             </select>
+          </div>
+        </section>
+
+        <section class="landing-section">
+          <h3>Puppet brain</h3>
+          <div class="brain-row" role="radiogroup" aria-label="Brain size">
+            <button
+              id="landing-brain-large"
+              class="brain-pill active"
+              type="button"
+              role="radio"
+              aria-checked="true"
+            >
+              <span class="brain-pill-title">Large brain</span>
+              <span class="brain-pill-sub">Smarter but slower (Claude Opus)</span>
+            </button>
+            <button
+              id="landing-brain-small"
+              class="brain-pill"
+              type="button"
+              role="radio"
+              aria-checked="false"
+            >
+              <span class="brain-pill-title">Small brain</span>
+              <span class="brain-pill-sub">Less smart but faster (Claude Haiku)</span>
+            </button>
           </div>
         </section>
 

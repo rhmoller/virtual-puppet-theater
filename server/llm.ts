@@ -12,7 +12,9 @@ export interface LLMBackend {
   pickVoice(voices: VoiceInfo[]): Promise<string | null>;
 }
 
-const MODEL = "claude-opus-4-7";
+// Default brain. The constructor accepts an override so the server can
+// route per-session traffic to Haiku for the "small brain" mode.
+const DEFAULT_MODEL = "claude-opus-4-7";
 
 const VOICE_PICK_SYSTEM = `You pick browser SpeechSynthesis voices for character TTS. Output JSON only, matching the given schema.`;
 
@@ -32,8 +34,16 @@ const VOICE_PICK_SCHEMA = {
 } as const;
 
 export class AnthropicBackend implements LLMBackend {
-  name = `anthropic-${MODEL}`;
+  readonly name: string;
   private client = new Anthropic();
+  // Haiku 4.5 rejects `output_config.effort`. Opus/Sonnet accept it and
+  // we explicitly want "low" so extended thinking stays off.
+  private readonly supportsEffort: boolean;
+
+  constructor(private readonly model: string = DEFAULT_MODEL) {
+    this.name = `anthropic-${model}`;
+    this.supportsEffort = !/haiku/i.test(model);
+  }
 
   async generateAction(messages: ChatMessage[]): Promise<Action> {
     const systemParts: string[] = [];
@@ -44,7 +54,7 @@ export class AnthropicBackend implements LLMBackend {
     }
 
     const response = await this.client.messages.create({
-      model: MODEL,
+      model: this.model,
       max_tokens: 600,
       // System prompt + conversation prefix are stable across turns, so
       // enabling prompt caching lets subsequent calls reuse the cached
@@ -55,7 +65,8 @@ export class AnthropicBackend implements LLMBackend {
       messages: turns,
       output_config: {
         // low effort: short, structured reply, no heavy reasoning needed.
-        effort: "low",
+        // Skipped on Haiku (the API rejects `effort` for that model).
+        ...(this.supportsEffort ? { effort: "low" as const } : {}),
         format: { type: "json_schema", schema: ACTION_JSON_SCHEMA.schema },
       },
     });
@@ -97,12 +108,12 @@ Voices:
 ${table}`;
 
     const response = await this.client.messages.create({
-      model: MODEL,
+      model: this.model,
       max_tokens: 200,
       system: VOICE_PICK_SYSTEM,
       messages: [{ role: "user", content: prompt }],
       output_config: {
-        effort: "low",
+        ...(this.supportsEffort ? { effort: "low" as const } : {}),
         format: { type: "json_schema", schema: VOICE_PICK_SCHEMA.schema },
       },
     });

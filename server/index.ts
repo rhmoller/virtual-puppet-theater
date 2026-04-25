@@ -1,4 +1,4 @@
-import type { ClientEvent, ServerEvent } from "./protocol.ts";
+import type { BrainSize, ClientEvent, ServerEvent } from "./protocol.ts";
 import { AnthropicBackend } from "./llm.ts";
 import { Session } from "./session.ts";
 import {
@@ -9,12 +9,17 @@ import {
 } from "./limits.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const llm = new AnthropicBackend();
+// Map brain size choice → Claude model. Defaults to large/Opus when the
+// query param is missing or unrecognized.
+const MODEL_FOR_BRAIN: Record<BrainSize, string> = {
+  large: "claude-opus-4-7",
+  small: "claude-haiku-4-5-20251001",
+};
 // Shared abuse limits. Per-session budget is created inside each Session.
 const ipCounter = new IpConnectionCounter();
 const globalCeiling = new GlobalCeiling();
 
-type SocketData = { session: Session; ip: string };
+type SocketData = { session: Session; ip: string; brain: BrainSize };
 
 // In production the server also serves the built frontend from ./dist; in
 // dev Vite owns the frontend and proxies /ws here.
@@ -32,8 +37,11 @@ const server = Bun.serve<SocketData, string>({
       if (!ipCounter.tryAcquire(ip)) {
         return new Response("too many connections", { status: 429 });
       }
+      // Brain size travels in the WS query string — we need it at session
+      // construction time (the opening prompt fires before any messages).
+      const brain: BrainSize = url.searchParams.get("brain") === "small" ? "small" : "large";
       const upgraded = srv.upgrade(req, {
-        data: { session: undefined as unknown as Session, ip },
+        data: { session: undefined as unknown as Session, ip, brain },
       });
       if (upgraded) return undefined;
       // Upgrade rejected for some other reason — release the slot we took.
@@ -66,8 +74,9 @@ const server = Bun.serve<SocketData, string>({
         console.log("[ws →]", formatServerEvent(event));
         ws.send(JSON.stringify(event));
       };
+      const llm = new AnthropicBackend(MODEL_FOR_BRAIN[ws.data.brain]);
       ws.data.session = new Session(llm, send, globalCeiling);
-      console.log("[ws] open");
+      console.log(`[ws] open (brain=${ws.data.brain}, model=${llm.name})`);
     },
     message(ws, raw) {
       let event: ClientEvent;
@@ -131,4 +140,6 @@ function formatServerEvent(event: ServerEvent): string {
 
 console.log(`[server] listening on http://localhost:${server.port}`);
 console.log(`[server] WS endpoint: ws://localhost:${server.port}/ws`);
-console.log(`[server] LLM backend: ${llm.name}`);
+console.log(
+  `[server] models: large=${MODEL_FOR_BRAIN.large}, small=${MODEL_FOR_BRAIN.small}`,
+);

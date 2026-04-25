@@ -56,6 +56,12 @@ export type UserPose = "normal" | "upside_down" | "sleeping";
 // transcript itself.
 export type UserEnergy = "low" | "med" | "high";
 
+// Brain size selector — picks which Claude model the puppet runs on.
+// Communicated via the WebSocket URL query string (?brain=large|small)
+// rather than a client event, since the server needs the choice when
+// constructing the session (the opening line fires immediately).
+export type BrainSize = "large" | "small";
+
 export type ClientEvent =
   | { type: "hello" }
   | { type: "transcript"; text: string; final: boolean }

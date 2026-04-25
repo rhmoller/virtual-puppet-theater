@@ -210,6 +210,9 @@ function flushSignal() {
   ) {
     return;
   }
+  // Brain is constructed only after the landing resolves (we need the
+  // chosen brain size for the WS URL). Frames before that just discard.
+  if (!brain) return;
   brain.sendSignal(delta);
   if (delta.pose !== undefined) lastSentPose = delta.pose;
   if (delta.energy !== undefined) lastSentEnergy = delta.energy;
@@ -233,7 +236,7 @@ async function frame() {
   for (const c of userControllers) c.update(dt, handData[c.hand], view);
   updateActive();
   flushSignal();
-  brain.notifyPuppetVisible(userControllers[0]!.visible, userControllers[1]!.visible);
+  brain?.notifyPuppetVisible(userControllers[0]!.visible, userControllers[1]!.visible);
   aiController.update(
     dt,
     view,
@@ -258,47 +261,53 @@ setSpeakingCallback((on) => {
 // pick — their explicit choice should win.
 let userVoiceLocked = false;
 
-const wsProto = location.protocol === "https:" ? "wss" : "ws";
-const brain = new Brain(`${wsProto}://${location.host}/ws`, {
-  onAction: (action) => aiController.applyAction(action),
-  onCancelSpeech: cancelSpeech,
-  onVoicePick: (uri) => {
-    if (userVoiceLocked) return;
-    setSelectedVoice(uri);
-  },
-  onConnection: (state) => hud.setConnection(state),
-  onMicState: (state) => {
-    if (state === "listening") hud.setMic("ok", "Microphone listening");
-    else if (state === "denied") hud.setMic("err", "Microphone blocked — enable it in your browser");
-    else if (state === "unsupported") hud.setMic("err", "Speech input needs Chrome or Edge");
-    else hud.setMic("err", "Microphone error");
-  },
-  onAiThinking: (thinking) => {
-    if (thinking) hud.setAi("thinking");
-    // 'speaking' / 'idle' are driven by the TTS callback above.
-  },
-  onServerError: (msg) => {
-    if (/rate|limit|budget/i.test(msg)) {
-      hud.toast("AI is taking a quick break — try again in a moment.");
-    } else {
-      hud.toast("AI hiccup — try again.");
-    }
-  },
-});
+// Brain is constructed only after the landing resolves so the chosen
+// brain size can be encoded in the WS URL (the server picks the LLM
+// model at session-construction time).
+let brain: Brain | null = null;
 
 // Landing page owns the camera/mic/TTS preflight. Once the user clicks
 // Start, we hand the already-acquired stream to the theater pipeline so
 // no second permission prompt is needed.
-showLanding().then(async ({ stream, userPickedVoiceURI }) => {
+showLanding().then(async ({ stream, userPickedVoiceURI, brainSize }) => {
   if (userPickedVoiceURI) {
     userVoiceLocked = true;
     setSelectedVoice(userPickedVoiceURI);
   }
 
-  brain.start();
+  const wsProto = location.protocol === "https:" ? "wss" : "ws";
+  const b = new Brain(`${wsProto}://${location.host}/ws?brain=${brainSize}`, {
+    onAction: (action) => aiController.applyAction(action),
+    onCancelSpeech: cancelSpeech,
+    onVoicePick: (uri) => {
+      if (userVoiceLocked) return;
+      setSelectedVoice(uri);
+    },
+    onConnection: (state) => hud.setConnection(state),
+    onMicState: (state) => {
+      if (state === "listening") hud.setMic("ok", "Microphone listening");
+      else if (state === "denied") hud.setMic("err", "Microphone blocked — enable it in your browser");
+      else if (state === "unsupported") hud.setMic("err", "Speech input needs Chrome or Edge");
+      else hud.setMic("err", "Microphone error");
+    },
+    onAiThinking: (thinking) => {
+      if (thinking) hud.setAi("thinking");
+      // 'speaking' / 'idle' are driven by the TTS callback above.
+    },
+    onServerError: (msg) => {
+      if (/rate|limit|budget/i.test(msg)) {
+        hud.toast("AI is taking a quick break — try again in a moment.");
+      } else {
+        hud.toast("AI hiccup — try again.");
+      }
+    },
+  });
+  brain = b;
+
+  b.start();
   onVoicesReady(() => {
     const voices = snapshotVoices();
-    if (voices && voices.length > 0) brain.sendVoiceList(voices);
+    if (voices && voices.length > 0) b.sendVoiceList(voices);
   });
 
   if (stream) {
@@ -315,5 +324,5 @@ showLanding().then(async ({ stream, userPickedVoiceURI }) => {
   } else {
     hud.setCamera("err", "Camera unavailable");
   }
-  brain.markReady();
+  b.markReady();
 });

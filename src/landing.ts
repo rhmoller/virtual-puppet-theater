@@ -8,10 +8,12 @@
 // stage. This makes the failure modes addressable.
 
 import { onVoicesReady } from "./speech";
+import type { BrainSize } from "../server/protocol.ts";
 
 export type LandingResult = {
   stream: MediaStream | null;
   userPickedVoiceURI: string | null;
+  brainSize: BrainSize;
 };
 
 type RecCtor = new () => MinimalRec;
@@ -36,7 +38,7 @@ export function showLanding(): Promise<LandingResult> {
   return new Promise((resolve) => {
     const root = document.getElementById("landing") as HTMLDivElement | null;
     if (!root) {
-      resolve({ stream: null, userPickedVoiceURI: null });
+      resolve({ stream: null, userPickedVoiceURI: null, brainSize: "large" });
       return;
     }
     const startBtn = document.getElementById("landing-start") as HTMLButtonElement;
@@ -48,11 +50,26 @@ export function showLanding(): Promise<LandingResult> {
     const sttTrace = document.getElementById("landing-stt-trace") as HTMLDivElement;
     const ttsBtn = document.getElementById("landing-tts-btn") as HTMLButtonElement;
     const voiceSelect = document.getElementById("landing-voice-select") as HTMLSelectElement;
+    const brainLargeBtn = document.getElementById("landing-brain-large") as HTMLButtonElement;
+    const brainSmallBtn = document.getElementById("landing-brain-small") as HTMLButtonElement;
 
     let stream: MediaStream | null = null;
     let userPickedVoiceURI: string | null = null;
+    let brainSize: BrainSize = "large";
     let landingRec: MinimalRec | null = null;
     let recRunning = false;
+
+    // ---- Brain size toggle ----
+    const setBrain = (next: BrainSize) => {
+      brainSize = next;
+      const isLarge = next === "large";
+      brainLargeBtn.classList.toggle("active", isLarge);
+      brainSmallBtn.classList.toggle("active", !isLarge);
+      brainLargeBtn.setAttribute("aria-checked", String(isLarge));
+      brainSmallBtn.setAttribute("aria-checked", String(!isLarge));
+    };
+    brainLargeBtn.addEventListener("click", () => setBrain("large"));
+    brainSmallBtn.addEventListener("click", () => setBrain("small"));
 
     const setCameraStatus = (text: string, cls: "pending" | "ok" | "warn" | "err") => {
       cameraStatus.textContent = text;
@@ -272,7 +289,7 @@ export function showLanding(): Promise<LandingResult> {
           if (resolved) return;
           resolved = true;
           setTimeout(() => root.remove(), 400);
-          resolve({ stream, userPickedVoiceURI });
+          resolve({ stream, userPickedVoiceURI, brainSize });
         };
 
         if (landingRec) {
