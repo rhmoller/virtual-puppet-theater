@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import type { Emotion, Gesture } from "../server/protocol.ts";
+import type { PuppetModel } from "./puppet-model";
 
 export type PuppetTheme = {
   skin: number;
@@ -34,7 +36,7 @@ const TONGUE = 0xcc5566;
  * Ragdoll in src/ragdoll.ts; their dimensions must match the constants
  * mirrored there.
  */
-export class Puppet {
+export class Puppet implements PuppetModel {
   readonly root = new THREE.Group();
   readonly torso = new THREE.Group();
   readonly leftShoulder = new THREE.Group();
@@ -219,6 +221,17 @@ export class Puppet {
       eye.rotation.x = -clamp(gy) * 0.18;
     }
   }
+
+  setRoll(rad: number) {
+    this.root.rotation.z = rad;
+  }
+
+  // The user puppet has no autonomous emotion/gesture/speaking — its
+  // expressiveness comes from the hand. These satisfy the PuppetModel
+  // interface so a single controller can drive either rig.
+  setEmotion(_emotion: Emotion) {}
+  playGesture(_gesture: Gesture) {}
+  setSpeaking(_on: boolean) {}
 
   // Idle blink. Called per-frame while the puppet is visible.
   update(dt: number) {

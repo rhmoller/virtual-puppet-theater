@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Emotion, Gesture } from "../server/protocol.ts";
+import type { PuppetModel } from "./puppet-model";
 
 // Palette. Deliberately non-naturalistic; see docs/specs/new-puppet.md for
 // the "not this" list of Muppet-adjacent colors.
@@ -191,7 +192,7 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
 // can use the same positioning without changes.
 const RIG_SCALE = 0.62;
 
-export class StagePuppet {
+export class StagePuppet implements PuppetModel {
   readonly root = new THREE.Group();
 
   private rig: THREE.Group;
@@ -226,6 +227,10 @@ export class StagePuppet {
   private speaking = false;
   private speakingEnv = 0;
   private speakingT = 0;
+
+  // Glance bias supplied via setGaze and consumed by update().
+  private glanceX = 0;
+  private glanceY = 0;
 
   constructor() {
     const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.85 });
@@ -379,6 +384,22 @@ export class StagePuppet {
     this.rightArm = makeArm(1, this.rightArmHome);
   }
 
+  // Mouth is TTS-driven via setSpeaking; setOpen is a no-op here so the
+  // unified PuppetModel interface stays uniform across rigs.
+  setOpen(_amount: number) {}
+
+  setRoll(rad: number) {
+    this.root.rotation.z = rad;
+  }
+
+  setGaze(gx: number, gy: number) {
+    // Persist a glance bias used by the next update() tick. StagePuppet's
+    // existing update(dt, glanceX, glanceY) signature already does the
+    // work — this just stores the values for the next frame.
+    this.glanceX = gx;
+    this.glanceY = gy;
+  }
+
   setEmotion(e: Emotion) {
     if (e === this.emotion) return;
     this.emotion = e;
@@ -399,7 +420,9 @@ export class StagePuppet {
     this.speaking = on;
   }
 
-  update(dt: number, glanceX = 0, glanceY = 0) {
+  update(dt: number) {
+    const glanceX = this.glanceX;
+    const glanceY = this.glanceY;
     this.t += dt;
     this.blinkSuppress = Math.max(0, this.blinkSuppress - dt);
 

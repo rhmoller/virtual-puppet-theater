@@ -1,13 +1,7 @@
 import * as THREE from "three";
-import type {
-  Hands as HandsType,
-  Results,
-  NormalizedLandmarkList,
-  LandmarkList,
-} from "@mediapipe/hands";
+import type { Hands as HandsType, Results } from "@mediapipe/hands";
 import { StagePuppet } from "./puppet-stage";
-import { Puppet, PUPPET_THEMES, type PuppetTheme } from "./puppet";
-import { Ragdoll } from "./ragdoll";
+import { Puppet, PUPPET_THEMES } from "./puppet";
 import { Theater } from "./theater";
 import { Brain } from "./brain";
 import { drawLandmarks } from "./landmarks";
@@ -22,7 +16,8 @@ import {
 } from "./speech";
 import { showLanding } from "./landing";
 import { Hud } from "./hud";
-import type { Action, Gaze } from "../server/protocol.ts";
+import { UserPuppetController, type HandData, type HandLabel } from "./user-controller";
+import { AiPuppetController } from "./ai-controller";
 
 declare global {
   interface Window {
@@ -66,29 +61,10 @@ const fill = new THREE.DirectionalLight(0x88aaff, 0.5);
 fill.position.set(-4, -1, 3);
 scene.add(fill);
 
-type HandLabel = "Left" | "Right";
-const puppetSpecs: { hand: HandLabel; theme: PuppetTheme }[] = [
-  { hand: "Left", theme: PUPPET_THEMES.warm },
-  { hand: "Right", theme: PUPPET_THEMES.cool },
-];
-const puppets = puppetSpecs.map((spec) => {
-  const puppet = new Puppet(spec.theme);
-  puppet.root.visible = false;
-  scene.add(puppet.root);
-  return { ...spec, puppet, ragdoll: new Ragdoll(puppet), wasVisible: false };
-});
-
-const stagePuppet = new StagePuppet();
-stagePuppet.root.visible = false;
-scene.add(stagePuppet.root);
-let stagePuppetSide: HandLabel | null = null;
-let stagePuppetRise = 0; // 0 = fully below the stage, 1 = fully risen
-let stagePuppetSettledX = 0;
-
-// Brain-driven gaze bias: set by an incoming action, decays back to 0.
-let brainGazeX = 0;
-let brainGazeY = 0;
-let brainGazeWeight = 0;
+// Push puppets back in depth so the proscenium frame (at z ≈ 0.3) renders
+// in front of them. Scale compensates for perspective shrinkage.
+const PUPPET_Z = -1.5;
+const PUPPET_DEPTH_SCALE = (camera.position.z - PUPPET_Z) / camera.position.z;
 
 function viewSize(z = 0) {
   const dist = camera.position.z - z;
@@ -96,10 +72,26 @@ function viewSize(z = 0) {
   return { w: h * camera.aspect, h };
 }
 
-// Push puppets back in depth so the proscenium frame (at z ≈ 0.3) renders
-// in front of them. Scale compensates for perspective shrinkage.
-const PUPPET_Z = -1.5;
-const PUPPET_DEPTH_SCALE = (camera.position.z - PUPPET_Z) / camera.position.z;
+// Two user-controlled puppets, one per hand, each driven by its own
+// controller. Themes are explicit so left/right have distinct identity.
+const userControllers: UserPuppetController[] = [
+  new UserPuppetController(new Puppet(PUPPET_THEMES.warm), "Left", PUPPET_Z, PUPPET_DEPTH_SCALE),
+  new UserPuppetController(new Puppet(PUPPET_THEMES.cool), "Right", PUPPET_Z, PUPPET_DEPTH_SCALE),
+];
+for (const c of userControllers) {
+  c.model.root.visible = false;
+  scene.add(c.model.root);
+}
+
+const stagePuppet = new StagePuppet();
+stagePuppet.root.visible = false;
+scene.add(stagePuppet.root);
+
+const aiController = new AiPuppetController(stagePuppet, {
+  puppetZ: PUPPET_Z,
+  depthScale: PUPPET_DEPTH_SCALE,
+  speak,
+});
 
 // theater.layout rebuilds ~100 merged bead geometries + curtains — too
 // expensive to run on every drag-resize event. Coalesce with a 120ms
@@ -128,175 +120,7 @@ if (theaterLayoutTimer !== null) {
   applyTheaterLayout();
 }
 
-type HandData = { lm: NormalizedLandmarkList; world: LandmarkList };
 const handData: Record<HandLabel, HandData | null> = { Left: null, Right: null };
-
-type GazeClass = "forward" | "left" | "right" | "up" | "down";
-
-type SmoothState = {
-  x: number;
-  y: number;
-  open: number;
-  gazeX: number;
-  gazeY: number;
-  visible: number;
-  roll: number;
-  gazeClass: GazeClass;
-};
-const smoothed: SmoothState[] = puppets.map(() => ({
-  x: 0,
-  y: 0,
-  open: 0,
-  gazeX: 0,
-  gazeY: 0,
-  visible: 0,
-  roll: 0,
-  gazeClass: "forward",
-}));
-
-const GAZE_TARGETS: Record<GazeClass, [number, number]> = {
-  forward: [0, 0],
-  left: [-1, 0],
-  right: [1, 0],
-  up: [0, 1],
-  down: [0, -1],
-};
-
-const posAlpha = 0.4;
-const openAlpha = 0.5;
-const gazeAlpha = 0.25;
-const visAlpha = 0.2;
-const rollAlpha = 0.25;
-
-type V3 = { x: number; y: number; z: number };
-const v3sub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
-const v3len = (a: V3) => Math.hypot(a.x, a.y, a.z);
-const v3avg = (...ps: V3[]): V3 => {
-  let x = 0,
-    y = 0,
-    z = 0;
-  for (const p of ps) {
-    x += p.x;
-    y += p.y;
-    z += p.z;
-  }
-  const n = ps.length;
-  return { x: x / n, y: y / n, z: z / n };
-};
-const wrapAngle = (a: number) => {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-};
-
-function updatePuppet(i: number) {
-  const spec = puppets[i]!;
-  const s = smoothed[i]!;
-  const data = handData[spec.hand];
-  const targetVisible = data ? 1 : 0;
-  s.visible += (targetVisible - s.visible) * visAlpha;
-
-  if (data) {
-    const { lm, world } = data;
-
-    // Position from image-space palm center (avg of wrist + four MCPs)
-    // — averaging suppresses per-landmark jitter.
-    const palmIm = {
-      x: (lm[0]!.x + lm[5]!.x + lm[9]!.x + lm[13]!.x + lm[17]!.x) / 5,
-      y: (lm[0]!.y + lm[5]!.y + lm[9]!.y + lm[13]!.y + lm[17]!.y) / 5,
-    };
-    const { w, h } = viewSize(PUPPET_Z);
-    const targetX = (0.5 - palmIm.x) * w;
-    const targetY = (0.5 - palmIm.y) * h;
-
-    // World-space geometry — metric, depth-invariant.
-    const wristW = world[0]!;
-    const thumbTipW = world[4]!;
-    const mcpAvgW = v3avg(world[5]!, world[9]!, world[13]!, world[17]!);
-    const palmW = v3avg(world[0]!, world[5]!, world[9]!, world[13]!, world[17]!);
-    const fingersTipW = v3avg(world[8]!, world[12]!, world[16]!, world[20]!);
-
-    // Mouth open: angle between (thumb_tip - palm) and (fingers_tip_avg - palm).
-    // Closed hand-puppet ≈ 0.3 rad, wide open ≈ 1.4 rad.
-    const tVec = v3sub(thumbTipW, palmW);
-    const fVec = v3sub(fingersTipW, palmW);
-    const cosA =
-      (tVec.x * fVec.x + tVec.y * fVec.y + tVec.z * fVec.z) /
-      Math.max(v3len(tVec) * v3len(fVec), 1e-5);
-    const angle = Math.acos(Math.min(1, Math.max(-1, cosA)));
-    // Bias toward closed: wider dead-zone at the low end, so small
-    // angles read as fully closed; only reach 1 at a clearly-open angle.
-    const targetOpen = Math.min(1, Math.max(0, (angle - 0.7) / 0.6));
-
-    const fwd = v3sub(mcpAvgW, wristW);
-    const fmag = Math.hypot(fwd.x, fwd.y);
-
-    // Gaze: project the palm normal into the image plane. side × forward
-    // points out of the palm toward the camera when palm faces camera, so
-    // its xy projection vanishes there and grows as the hand yaws/pitches.
-    // Sign flips for the Left hand because the across-palm axis reverses.
-    const side = v3sub(world[17]!, world[5]!);
-    const sign = spec.hand === "Left" ? -1 : 1;
-    const normal = {
-      x: sign * (side.y * fwd.z - side.z * fwd.y),
-      y: sign * (side.z * fwd.x - side.x * fwd.z),
-      z: sign * (side.x * fwd.y - side.y * fwd.x),
-    };
-    // Project palm normal into screen space (mirror x for flipped webcam,
-    // flip y for three.js y-up). Magnitude shrinks toward 0 as palm faces
-    // the camera, grows as the hand yaws/pitches.
-    const nlen = Math.max(v3len(normal), 1e-5);
-    const nxs = -normal.x / nlen;
-    const nys = -normal.y / nlen;
-    const nmag = Math.hypot(nxs, nys);
-
-    // Classify into {forward, left, right, up, down} with hysteresis.
-    const ENTER = 0.45;
-    const EXIT = 0.3;
-    const dominant = (): GazeClass =>
-      Math.abs(nxs) >= Math.abs(nys) ? (nxs > 0 ? "right" : "left") : nys > 0 ? "up" : "down";
-    if (s.gazeClass === "forward") {
-      if (nmag > ENTER) s.gazeClass = dominant();
-    } else if (nmag < EXIT) {
-      s.gazeClass = "forward";
-    } else {
-      // Allow switching between directional classes only on strong dominance.
-      const next = dominant();
-      const dom = Math.max(Math.abs(nxs), Math.abs(nys));
-      const sub = Math.min(Math.abs(nxs), Math.abs(nys));
-      if (next !== s.gazeClass && dom > sub * 1.5) s.gazeClass = next;
-    }
-    const [targetGazeX, targetGazeY] = GAZE_TARGETS[s.gazeClass];
-
-    // Roll: angle that points the puppet's local +Y along the palm-forward
-    // axis (wrist -> MCP center) projected into the image plane.
-    let targetRoll = s.roll;
-    if (fmag > 1e-5) {
-      // atan2(fwd.x, -fwd.y) gives 0 when fingers point up the screen
-      // (fwd.y < 0 in image coords). Both hands share this convention.
-      const base = Math.atan2(fwd.x, -fwd.y);
-      targetRoll = s.roll + wrapAngle(base - s.roll);
-    }
-
-    s.x += (targetX - s.x) * posAlpha;
-    s.y += (targetY - s.y) * posAlpha;
-    s.open += (targetOpen - s.open) * openAlpha;
-    s.gazeX += (targetGazeX - s.gazeX) * gazeAlpha;
-    s.gazeY += (targetGazeY - s.gazeY) * gazeAlpha;
-    s.roll += (targetRoll - s.roll) * rollAlpha;
-  }
-
-  const p = spec.puppet.root;
-  const visible = s.visible > 0.02;
-  p.visible = visible;
-  p.position.set(s.x, s.y, PUPPET_Z);
-  p.rotation.z = s.roll;
-  p.scale.setScalar(0.9 * PUPPET_DEPTH_SCALE * Math.max(0.3, s.visible));
-  spec.puppet.setOpen(s.open);
-  spec.puppet.setGaze(s.gazeX, s.gazeY);
-  if (visible && !spec.wasVisible) spec.ragdoll.reset();
-  spec.wasVisible = visible;
-}
 
 const hands = new window.Hands({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
@@ -332,65 +156,6 @@ hands.onResults((results: Results) => {
   }
 });
 
-function updateStagePuppet(dt: number) {
-  const leftPresent = handData.Left !== null;
-  const rightPresent = handData.Right !== null;
-  const count = (leftPresent ? 1 : 0) + (rightPresent ? 1 : 0);
-  // The stage puppet stays on stage unless the user brings up a second
-  // hand — then it cedes the stage so both human puppets have room.
-  const riseTarget = count >= 2 ? 0 : 1;
-
-  // Exponential ease toward target (slightly faster on descent).
-  const tau = riseTarget > stagePuppetRise ? 0.28 : 0.18;
-  stagePuppetRise += (riseTarget - stagePuppetRise) * (1 - Math.exp(-dt / tau));
-
-  // Fully hidden when settled below — stop animating, free the slot.
-  if (riseTarget === 0 && stagePuppetRise < 0.005) {
-    stagePuppet.root.visible = false;
-    stagePuppetSide = null;
-    return;
-  }
-  stagePuppet.root.visible = true;
-
-  const { w, h } = viewSize(PUPPET_Z);
-  const settledY = -h * 0.1;
-  const belowY = -h / 2 - 2.8; // offstage below the apron
-
-  // Pick the stage puppet's resting side based on where the human puppet
-  // is (if any). With no hands up, default to stage-left for consistency.
-  if (count === 1) {
-    stagePuppetSide = leftPresent ? "Right" : "Left";
-    const activeIdx = puppets.findIndex(
-      (p) => (p.hand === "Left" && leftPresent) || (p.hand === "Right" && rightPresent),
-    );
-    const active = smoothed[activeIdx]!;
-    const sideSign = Math.sign(active.x) || (stagePuppetSide === "Right" ? 1 : -1);
-    const targetX = -sideSign * w * 0.22;
-    stagePuppetSettledX += (targetX - stagePuppetSettledX) * (1 - Math.exp(-dt / 0.25));
-  } else if (count === 0) {
-    if (stagePuppetSide === null) stagePuppetSide = "Right";
-    const targetX = (stagePuppetSide === "Right" ? -1 : 1) * w * 0.22;
-    stagePuppetSettledX += (targetX - stagePuppetSettledX) * (1 - Math.exp(-dt / 0.25));
-  }
-
-  stagePuppet.root.position.x = stagePuppetSettledX;
-  stagePuppet.root.position.y = belowY + (settledY - belowY) * stagePuppetRise;
-  stagePuppet.root.position.z = PUPPET_Z;
-  stagePuppet.root.scale.setScalar(0.65 * PUPPET_DEPTH_SCALE);
-
-  // Glance toward the currently visible puppet (if any), blended with
-  // whatever gaze the Brain most recently requested.
-  const activeIdx = puppets.findIndex((p) => p.puppet.root.visible);
-  const puppetGlance =
-    activeIdx >= 0
-      ? Math.max(-1, Math.min(1, (smoothed[activeIdx]!.x - stagePuppet.root.position.x) * 0.3))
-      : 0;
-  brainGazeWeight *= Math.exp(-dt / 1.2);
-  const glanceX = brainGazeX * brainGazeWeight + puppetGlance * (1 - brainGazeWeight);
-  const glanceY = brainGazeY * brainGazeWeight;
-  stagePuppet.update(dt, glanceX, glanceY);
-}
-
 let cameraReady = false;
 let sending = false;
 let lastFrameTime = performance.now();
@@ -404,15 +169,16 @@ async function frame() {
   const now = performance.now();
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
-  for (let i = 0; i < puppets.length; i++) updatePuppet(i);
-  brain.notifyPuppetVisible(puppets[0]!.puppet.root.visible, puppets[1]!.puppet.root.visible);
-  for (const spec of puppets) {
-    if (spec.puppet.root.visible) {
-      spec.ragdoll.update(dt);
-      spec.puppet.update(dt);
-    }
-  }
-  updateStagePuppet(dt);
+
+  const view = viewSize(PUPPET_Z);
+  for (const c of userControllers) c.update(dt, handData[c.hand], view);
+  brain.notifyPuppetVisible(userControllers[0]!.visible, userControllers[1]!.visible);
+  aiController.update(
+    dt,
+    view,
+    userControllers.map((c) => ({ visible: c.visible, state: c.state, hand: c.hand })),
+  );
+
   drawLandmarks(handData);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -427,32 +193,13 @@ setSpeakingCallback((on) => {
   hud.setAi(on ? "speaking" : "idle");
 });
 
-const GAZE_TO_BIAS: Record<Gaze, { x: number; y: number }> = {
-  user: { x: 0, y: 0 },
-  away: { x: -0.9, y: 0 },
-  up: { x: 0, y: 1 },
-  down: { x: 0, y: -1 },
-};
-
-function applyAction(action: Action) {
-  if (action.gaze) {
-    const bias = GAZE_TO_BIAS[action.gaze];
-    brainGazeX = bias.x;
-    brainGazeY = bias.y;
-    brainGazeWeight = 1;
-  }
-  if (action.emotion) stagePuppet.setEmotion(action.emotion);
-  if (action.gesture) stagePuppet.playGesture(action.gesture);
-  if (action.say) speak(action.say);
-}
-
 // If the user picks a voice on the landing page, suppress the server's
 // pick — their explicit choice should win.
 let userVoiceLocked = false;
 
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const brain = new Brain(`${wsProto}://${location.host}/ws`, {
-  onAction: applyAction,
+  onAction: (action) => aiController.applyAction(action),
   onCancelSpeech: cancelSpeech,
   onVoicePick: (uri) => {
     if (userVoiceLocked) return;

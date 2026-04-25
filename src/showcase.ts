@@ -154,7 +154,8 @@ function frame() {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   const bias = GAZE_TO_BIAS[currentGaze];
-  puppet.update(dt, bias.x, bias.y);
+  puppet.setGaze(bias.x, bias.y);
+  puppet.update(dt);
 
   // User puppets: gentle gaze sway + periodic mouth-open so the jaw mechanic is visible.
   userT += dt;
