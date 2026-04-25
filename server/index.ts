@@ -7,9 +7,13 @@ const llm = new AnthropicBackend();
 
 type SocketData = { session: Session };
 
+// In production the server also serves the built frontend from ./dist; in
+// dev Vite owns the frontend and proxies /ws here.
+const STATIC_DIR = "./dist";
+
 const server = Bun.serve<SocketData, string>({
   port: PORT,
-  fetch(req, srv) {
+  async fetch(req, srv) {
     const url = new URL(req.url);
     if (url.pathname === "/ws") {
       const upgraded = srv.upgrade(req, {
@@ -21,6 +25,21 @@ const server = Bun.serve<SocketData, string>({
     if (url.pathname === "/health") {
       return new Response("ok");
     }
+
+    // Static file serving. Reject any path containing ".." as a cheap
+    // traversal guard; URL normalization already strips most of them but
+    // this is belt-and-braces for the file-system read below.
+    if (url.pathname.includes("..")) {
+      return new Response("not found", { status: 404 });
+    }
+    const rel = url.pathname === "/" ? "/index.html" : url.pathname;
+    const file = Bun.file(`${STATIC_DIR}${rel}`);
+    if (await file.exists()) return new Response(file);
+
+    // SPA fallback so client-side routing / deep links land on index.html.
+    const index = Bun.file(`${STATIC_DIR}/index.html`);
+    if (await index.exists()) return new Response(index);
+
     return new Response("not found", { status: 404 });
   },
   websocket: {

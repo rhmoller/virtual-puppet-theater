@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+.claude
+.playwright-mcp
+docs
+tests
+README.md
+LICENSE
+*.log
+.DS_Store
+.idea
+.vscode
