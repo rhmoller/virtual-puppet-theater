@@ -92,11 +92,16 @@ export type PuppetId = "left" | "right" | "ai";
 // Parametric description of any visual asset — pre-fab or generated.
 // Composed entirely of THREE primitives so the same renderer handles
 // hand-authored catalog items and on-the-fly LLM-designed assets.
+//
+// `color` accepts either a hex string ("#ff8800" or "ff8800" — the
+// LLM-friendly form) or a packed integer (0xff8800 — convenient for
+// hand-authored catalog literals). The renderer parses both.
 export type AssetShape = "sphere" | "box" | "cone" | "cylinder" | "torus";
+export type AssetColor = string | number;
 export type AssetSpec = {
   parts: Array<{
     shape: AssetShape;
-    color: number;
+    color: AssetColor;
     position?: [number, number, number];
     rotation?: [number, number, number];
     scale?: [number, number, number];
@@ -276,9 +281,9 @@ export const ASSET_SPEC_JSON_SCHEMA = {
           properties: {
             shape: { type: "string", enum: [...SHAPES] },
             color: {
-              type: "integer",
+              type: "string",
               description:
-                "RGB color packed as 0xRRGGBB (e.g., 0xff8800 for orange). Integer in range 0..16777215.",
+                'Hex RGB color string with six hex digits, optional leading "#". Examples: "#ff8800" (orange), "#4caf50" (green), "#2a2a2a" (near-black).',
             },
             position: {
               type: "array",

@@ -29,7 +29,7 @@ export function renderSpec(spec: AssetSpec): THREE.Group {
     const geom = GEOMETRIES[part.shape];
     if (!geom) continue;
     const mat = new THREE.MeshStandardMaterial({
-      color: (part.color ?? 0xcccccc) & 0xffffff, // truncate to 24-bit color
+      color: parseColor(part.color),
       roughness: 0.7,
     });
     const mesh = new THREE.Mesh(geom, mat);
@@ -44,6 +44,32 @@ export function renderSpec(spec: AssetSpec): THREE.Group {
     group.add(mesh);
   }
   return group;
+}
+
+const FALLBACK_COLOR = 0xcccccc;
+
+// Color in the wire spec can be a hex string ("#ff8800" or "ff8800" —
+// what the LLM emits) or a packed integer (0xff8800 — convenient for
+// hand-authored catalog literals). Returns a 24-bit integer.
+function parseColor(c: number | string | undefined | null): number {
+  if (typeof c === "number" && Number.isFinite(c) && c > 0) {
+    return c & 0xffffff;
+  }
+  if (typeof c === "string") {
+    const hex = c.startsWith("#") ? c.slice(1) : c;
+    // Accept 3-digit shorthand ("f80" → "ff8800") for completeness.
+    const expanded =
+      hex.length === 3
+        ? hex
+            .split("")
+            .map((ch) => ch + ch)
+            .join("")
+        : hex;
+    if (expanded.length !== 6) return FALLBACK_COLOR;
+    const n = parseInt(expanded, 16);
+    return Number.isFinite(n) ? n & 0xffffff : FALLBACK_COLOR;
+  }
+  return FALLBACK_COLOR;
 }
 
 function vec3(

@@ -29,7 +29,7 @@ const SYSTEM_PROMPT = `You are an asset designer for a small kid-facing puppet t
 Constraints:
 - Use 1–6 parts. Lower is better — silhouette reads at a distance.
 - Coordinates are in slot-local space. The piece will mount on a puppet's slot (head, hand, etc.) or at a scene anchor. Keep the piece centered around the origin (0,0,0). Vertical extent typically ranges from -0.5 to 1.5 units.
-- Colors are integers in 0xRRGGBB form (e.g., 0xff8800 for orange, 0x4caf50 for green). Use saturated, friendly colors — kid-show palette.
+- Colors are CSS-style hex strings ("#ff8800" for orange, "#4caf50" for green, "#2a2a2a" for near-black). Use saturated, friendly colors — kid-show palette.
 - Scale values are absolute multipliers on a unit primitive (sphere/box/cone/cylinder/torus all unit-sized). Typical values are 0.1 to 2.0 per axis.
 - Keep parts contiguous — they should look like one object. Don't scatter pieces.
 - Don't include text, decals, or anything beyond the 5 primitives.
@@ -38,24 +38,24 @@ Examples:
 
 A watermelon hat (cosmetic, mounts at slot=head):
 {"parts":[
-  {"shape":"sphere","color":0x2e7d32,"position":[0,1.0,0],"rotation":[0,0,0],"scale":[1.4,0.7,1.4]},
-  {"shape":"sphere","color":0xff5252,"position":[0,1.0,0],"rotation":[0,0,0],"scale":[1.3,0.62,1.3]}
+  {"shape":"sphere","color":"#2e7d32","position":[0,1.0,0],"rotation":[0,0,0],"scale":[1.4,0.7,1.4]},
+  {"shape":"sphere","color":"#ff5252","position":[0,1.0,0],"rotation":[0,0,0],"scale":[1.3,0.62,1.3]}
 ]}
 
 A giant rubber duck (scene prop, mounts at an anchor):
 {"parts":[
-  {"shape":"sphere","color":0xffeb3b,"position":[0,0.4,0],"rotation":[0,0,0],"scale":[0.9,0.8,1.2]},
-  {"shape":"sphere","color":0xffeb3b,"position":[0,1.0,0.4],"rotation":[0,0,0],"scale":[0.55,0.5,0.55]},
-  {"shape":"cone","color":0xff9800,"position":[0,1.0,0.85],"rotation":[1.57,0,0],"scale":[0.18,0.3,0.18]},
-  {"shape":"sphere","color":0x111111,"position":[0.18,1.1,0.6],"rotation":[0,0,0],"scale":[0.06,0.06,0.06]},
-  {"shape":"sphere","color":0x111111,"position":[-0.18,1.1,0.6],"rotation":[0,0,0],"scale":[0.06,0.06,0.06]}
+  {"shape":"sphere","color":"#ffeb3b","position":[0,0.4,0],"rotation":[0,0,0],"scale":[0.9,0.8,1.2]},
+  {"shape":"sphere","color":"#ffeb3b","position":[0,1.0,0.4],"rotation":[0,0,0],"scale":[0.55,0.5,0.55]},
+  {"shape":"cone","color":"#ff9800","position":[0,1.0,0.85],"rotation":[1.57,0,0],"scale":[0.18,0.3,0.18]},
+  {"shape":"sphere","color":"#111111","position":[0.18,1.1,0.6],"rotation":[0,0,0],"scale":[0.06,0.06,0.06]},
+  {"shape":"sphere","color":"#111111","position":[-0.18,1.1,0.6],"rotation":[0,0,0],"scale":[0.06,0.06,0.06]}
 ]}
 
 A pair of star-shaped sunglasses (cosmetic, mounts at slot=eyes):
 {"parts":[
-  {"shape":"sphere","color":0xffd23a,"position":[-0.32,0,0.05],"rotation":[0,0,0],"scale":[0.32,0.32,0.05]},
-  {"shape":"sphere","color":0xffd23a,"position":[0.32,0,0.05],"rotation":[0,0,0],"scale":[0.32,0.32,0.05]},
-  {"shape":"box","color":0x2a2a2a,"position":[0,0,0.05],"rotation":[0,0,0],"scale":[0.18,0.04,0.04]}
+  {"shape":"sphere","color":"#ffd23a","position":[-0.32,0,0.05],"rotation":[0,0,0],"scale":[0.32,0.32,0.05]},
+  {"shape":"sphere","color":"#ffd23a","position":[0.32,0,0.05],"rotation":[0,0,0],"scale":[0.32,0.32,0.05]},
+  {"shape":"box","color":"#2a2a2a","position":[0,0,0.05],"rotation":[0,0,0],"scale":[0.18,0.04,0.04]}
 ]}
 
 Output the JSON AssetSpec only. No commentary.`;
@@ -114,6 +114,7 @@ export class AssetGenerator {
       console.log(
         `[asset-gen] generated "${args.description}" (${args.mountKind}, ${parsed.parts.length} parts)`,
       );
+      console.log("[asset-gen] spec:", JSON.stringify(parsed));
       return parsed;
     } catch (err) {
       console.warn("[asset-gen] error:", err);
