@@ -1,5 +1,6 @@
 import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "./protocol.ts";
 import type { ChatMessage, LLMBackend } from "./llm.ts";
+import { CallBudget, type GlobalCeiling } from "./limits.ts";
 
 const SYSTEM_PROMPT = `You are Clawd, a cheerful, goofy hand-puppet in a small virtual theater. A kid on a webcam brings the other puppet to life with their hand.
 
@@ -48,9 +49,15 @@ export class Session {
   // Debounce rapid on/off flicker from hand-tracking dropouts.
   private puppetDebounce: ReturnType<typeof setTimeout> | null = null;
 
+  private budget = new CallBudget();
+  // Avoid spamming rate-limit error events when many requests trip the
+  // limit in quick succession; emit at most one every few seconds.
+  private lastBudgetErrorAt = 0;
+
   constructor(
     private llm: LLMBackend,
     private send: (event: ServerEvent) => void,
+    private global: GlobalCeiling,
   ) {
     this.scheduleIdleCheck();
     // Fire an opening line so Clawd greets the user.
@@ -168,7 +175,20 @@ export class Session {
     this.inFlight = true;
     try {
       while (true) {
+        // Budget gate. Per-session sliding window + lifetime cap, then the
+        // global daily ceiling. If any rejects we drop the triggering turn
+        // (it's already been pushed onto history) and skip the LLM call.
         const callStartLen = this.history.length;
+        const budgetVerdict = this.budget.consume(Date.now());
+        const globalVerdict =
+          budgetVerdict === "ok" ? this.global.consume(new Date()) : "ok";
+        if (budgetVerdict !== "ok" || globalVerdict !== "ok") {
+          this.history.length = callStartLen - 1; // drop the unanswered turn
+          this.emitBudgetError(budgetVerdict, globalVerdict);
+          // Don't loop pending turns either — they'd just fail too.
+          this.pendingTurns = [];
+          break;
+        }
         const action = await this.llm.generateAction(this.history);
 
         const discardStageResponse =
@@ -198,6 +218,23 @@ export class Session {
     } finally {
       this.inFlight = false;
     }
+  }
+
+  private emitBudgetError(
+    budget: "ok" | "rate" | "lifetime",
+    global: "ok" | "exhausted",
+  ) {
+    const now = Date.now();
+    if (now - this.lastBudgetErrorAt < 5000) return;
+    this.lastBudgetErrorAt = now;
+    const message =
+      global === "exhausted"
+        ? "rate limit (global daily)"
+        : budget === "lifetime"
+          ? "rate limit (session lifetime)"
+          : "rate limit (rate)";
+    console.warn(`[session] budget reject: ${message}`);
+    this.send({ type: "error", message });
   }
 
   private trimHistory() {

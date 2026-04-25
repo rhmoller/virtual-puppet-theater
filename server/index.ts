@@ -1,11 +1,20 @@
 import type { ClientEvent, ServerEvent } from "./protocol.ts";
 import { AnthropicBackend } from "./llm.ts";
 import { Session } from "./session.ts";
+import {
+  IpConnectionCounter,
+  GlobalCeiling,
+  clientIpFrom,
+  originAllowed,
+} from "./limits.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const llm = new AnthropicBackend();
+// Shared abuse limits. Per-session budget is created inside each Session.
+const ipCounter = new IpConnectionCounter();
+const globalCeiling = new GlobalCeiling();
 
-type SocketData = { session: Session };
+type SocketData = { session: Session; ip: string };
 
 // In production the server also serves the built frontend from ./dist; in
 // dev Vite owns the frontend and proxies /ws here.
@@ -16,10 +25,19 @@ const server = Bun.serve<SocketData, string>({
   async fetch(req, srv) {
     const url = new URL(req.url);
     if (url.pathname === "/ws") {
+      if (!originAllowed(req.headers)) {
+        return new Response("forbidden", { status: 403 });
+      }
+      const ip = clientIpFrom(req.headers);
+      if (!ipCounter.tryAcquire(ip)) {
+        return new Response("too many connections", { status: 429 });
+      }
       const upgraded = srv.upgrade(req, {
-        data: { session: undefined as unknown as Session },
+        data: { session: undefined as unknown as Session, ip },
       });
       if (upgraded) return undefined;
+      // Upgrade rejected for some other reason — release the slot we took.
+      ipCounter.release(ip);
       return new Response("upgrade failed", { status: 400 });
     }
     if (url.pathname === "/health") {
@@ -48,7 +66,7 @@ const server = Bun.serve<SocketData, string>({
         console.log("[ws →]", formatServerEvent(event));
         ws.send(JSON.stringify(event));
       };
-      ws.data.session = new Session(llm, send);
+      ws.data.session = new Session(llm, send, globalCeiling);
       console.log("[ws] open");
     },
     message(ws, raw) {
@@ -64,6 +82,7 @@ const server = Bun.serve<SocketData, string>({
     },
     close(ws) {
       ws.data.session?.close();
+      ipCounter.release(ws.data.ip);
       console.log("[ws] close");
     },
   },
