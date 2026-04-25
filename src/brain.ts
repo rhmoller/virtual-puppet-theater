@@ -90,6 +90,15 @@ export class Brain {
     this.flushVoiceList();
   }
 
+  /**
+   * Push body-language signal updates to the server. Caller is
+   * responsible for diffing and only calling on meaningful change —
+   * Brain itself sends every call straight to the wire.
+   */
+  sendSignal(signal: Omit<Extract<ClientEvent, { type: "signal" }>, "type">) {
+    this.send({ type: "signal", ...signal });
+  }
+
   private flushVoiceList() {
     if (this.pendingVoiceList && this.ws?.readyState === WebSocket.OPEN) {
       this.send({ type: "voice_list", voices: this.pendingVoiceList });
@@ -290,6 +299,14 @@ function formatClientEvent(event: ClientEvent): string {
       return `voice_list: ${event.voices.length} voices`;
     case "hello":
       return "hello";
+    case "signal": {
+      const parts = [
+        event.gestures?.length ? `g=[${event.gestures.join(",")}]` : null,
+        event.pose ? `pose=${event.pose}` : null,
+        event.energy ? `energy=${event.energy}` : null,
+      ].filter(Boolean);
+      return `signal: ${parts.join(" ") || "(empty)"}`;
+    }
   }
 }
 

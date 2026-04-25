@@ -18,6 +18,7 @@ import { showLanding } from "./landing";
 import { Hud } from "./hud";
 import { UserPuppetController, type HandData, type HandLabel } from "./user-controller";
 import { AiPuppetController } from "./ai-controller";
+import type { UserGesture, UserPose, UserEnergy } from "../server/protocol.ts";
 
 declare global {
   interface Window {
@@ -156,6 +157,64 @@ hands.onResults((results: Results) => {
   }
 });
 
+// "Active" puppet selection: when both hands are visible, whichever has
+// the higher recent palm motion drives the pose/energy signal. Hysteresis
+// (1.5× margin against the current active) prevents thrash when motions
+// are similar.
+let activeController: UserPuppetController | null = null;
+function updateActive() {
+  const visible = userControllers.filter((c) => c.visible);
+  if (visible.length === 0) {
+    activeController = null;
+    return;
+  }
+  if (visible.length === 1) {
+    activeController = visible[0]!;
+    return;
+  }
+  const sorted = visible.toSorted((a, b) => b.recentMotion - a.recentMotion);
+  const top = sorted[0]!;
+  if (activeController === null || activeController === top) {
+    activeController = top;
+    return;
+  }
+  if (top.recentMotion > activeController.recentMotion * 1.5) {
+    activeController = top;
+  }
+}
+
+// Diff vs. last sent so we only emit a `signal` event on real change.
+let lastSentPose: UserPose | null = null;
+let lastSentEnergy: UserEnergy | null = null;
+function flushSignal() {
+  // Gestures are merged across both hands (flat list, no attribution).
+  // Drain even from the inactive hand — we don't want to lose them.
+  const gestures: UserGesture[] = [];
+  for (const c of userControllers) {
+    const drained = c.drainGestures();
+    if (drained.length > 0) gestures.push(...drained);
+  }
+
+  const pose = activeController?.pose ?? null;
+  const energy = activeController?.energy ?? null;
+
+  const delta: { gestures?: UserGesture[]; pose?: UserPose; energy?: UserEnergy } = {};
+  if (gestures.length > 0) delta.gestures = gestures;
+  if (pose !== null && pose !== lastSentPose) delta.pose = pose;
+  if (energy !== null && energy !== lastSentEnergy) delta.energy = energy;
+
+  if (
+    delta.gestures === undefined &&
+    delta.pose === undefined &&
+    delta.energy === undefined
+  ) {
+    return;
+  }
+  brain.sendSignal(delta);
+  if (delta.pose !== undefined) lastSentPose = delta.pose;
+  if (delta.energy !== undefined) lastSentEnergy = delta.energy;
+}
+
 let cameraReady = false;
 let sending = false;
 let lastFrameTime = performance.now();
@@ -172,6 +231,8 @@ async function frame() {
 
   const view = viewSize(PUPPET_Z);
   for (const c of userControllers) c.update(dt, handData[c.hand], view);
+  updateActive();
+  flushSignal();
   brain.notifyPuppetVisible(userControllers[0]!.visible, userControllers[1]!.visible);
   aiController.update(
     dt,

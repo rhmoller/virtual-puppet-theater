@@ -138,6 +138,12 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
       bodyGroup.rotation.y += Math.sin(t * Math.PI * 2 * 4.3) * 0.25 * env;
     },
   },
+  // Clawd is the legacy puppet (no longer on stage). The new
+  // jump/spin/wiggle gestures aren't authored for him; treat them as
+  // no-ops so the type satisfies Record<Gesture, ...>.
+  jump: null,
+  spin: null,
+  wiggle: null,
 };
 
 /**

@@ -164,6 +164,82 @@ test("SESSION-5: user_speaking during a stage-note call discards that response",
   session.close();
 });
 
+test("SESSION-6: signal events bake gestures + pose + energy into the next user turn", async () => {
+  const llm = new FakeLLM();
+  const sent: ServerEvent[] = [];
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  await flush();
+
+  // Pre-load body-language signals before the user speaks.
+  session.handle({ type: "signal", gestures: ["wave"], pose: "normal", energy: "high" });
+  session.handle({ type: "signal", gestures: ["thumbs_up"], pose: "upside_down" });
+  session.handle({ type: "transcript", text: "hello", final: true });
+
+  // Resolve the opening; the follow-up call carries the user turn with
+  // both gestures merged + the latest pose + energy.
+  llm.resolveNext();
+  await flush();
+
+  expect(llm.calls.length).toBe(2);
+  const followup = llm.calls[1]!;
+  const userTurn = followup.findLast((m) => m.role === "user");
+  expect(userTurn?.content).toContain("hello");
+  expect(userTurn?.content).toContain("[signal:");
+  expect(userTurn?.content).toContain("gestures=[wave, thumbs_up]");
+  expect(userTurn?.content).toContain("pose=upside_down");
+  expect(userTurn?.content).toContain("energy=high");
+
+  // Next turn: gesture buffer drained, pose + energy still sticky.
+  session.handle({ type: "transcript", text: "again", final: true });
+  llm.resolveNext();
+  await flush();
+
+  const third = llm.calls[2]!;
+  const lastUser = third.findLast((m) => m.role === "user");
+  expect(lastUser?.content).toContain("again");
+  expect(lastUser?.content).not.toContain("gestures=");
+  expect(lastUser?.content).toContain("pose=upside_down");
+  expect(lastUser?.content).toContain("energy=high");
+
+  llm.resolveNext();
+  await flush();
+  session.close();
+});
+
+test("SESSION-7: idle escalation prompts include the latest pose + drained gestures", async () => {
+  const llm = new FakeLLM();
+  const sent: ServerEvent[] = [];
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  await flush();
+  expect(llm.calls.length).toBe(1);
+
+  // Resolve the opening and drain its (empty) signal block.
+  llm.resolveNext();
+  await flush();
+
+  // User flips the puppet upside down and waves silently.
+  session.handle({ type: "signal", pose: "upside_down" });
+  session.handle({ type: "signal", gestures: ["wave"] });
+
+  // Force an idle escalation by rewinding lastUserActivity. The check
+  // lands as a stage note; signal block must include both pose + gesture.
+  const s = inspect(session);
+  s.lastUserActivity = Date.now() - 20_000;
+  s.checkIdle();
+
+  expect(llm.calls.length).toBe(2);
+  const escalation = llm.calls[1]!;
+  const stageTurn = escalation.findLast((m) => m.role === "user");
+  expect(stageTurn?.content).toContain("[stage note:");
+  expect(stageTurn?.content).toContain("[signal:");
+  expect(stageTurn?.content).toContain("gestures=[wave]");
+  expect(stageTurn?.content).toContain("pose=upside_down");
+
+  llm.resolveNext();
+  await flush();
+  session.close();
+});
+
 test("SESSION-4: idle-escalation ticks while in-flight collapse into one follow-up", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];

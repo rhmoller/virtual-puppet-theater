@@ -180,6 +180,33 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
       head.rotation.y += Math.sin(t * Math.PI * 2 * 4.3) * 0.3 * env;
     },
   },
+  jump: {
+    duration: 0.6,
+    apply(t, { bodyGroup }) {
+      // Single arc: rises through the first half, falls through the second.
+      // sin(πp) gives a clean 0 → 1 → 0 envelope across the duration.
+      const p = t / 0.6;
+      bodyGroup.position.y += Math.sin(p * Math.PI) * 0.6;
+    },
+  },
+  spin: {
+    duration: 0.9,
+    apply(t, { bodyGroup }) {
+      // Smooth ease-in-out 360° rotation about the body's vertical axis.
+      // Using a sin-derived ease keeps start/end velocity at 0 so it
+      // doesn't snap into or out of the spin.
+      const p = Math.min(1, t / 0.9);
+      const eased = 0.5 - 0.5 * Math.cos(p * Math.PI);
+      bodyGroup.rotation.y += eased * Math.PI * 2;
+    },
+  },
+  wiggle: {
+    duration: 1.0,
+    apply(t, { bodyGroup }) {
+      const env = envelope(t, 1.0);
+      bodyGroup.rotation.z += Math.sin(t * Math.PI * 2 * 3.0) * 0.2 * env;
+    },
+  },
 };
 
 /**

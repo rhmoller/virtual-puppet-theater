@@ -1,6 +1,8 @@
 import type { NormalizedLandmarkList, LandmarkList } from "@mediapipe/hands";
 import { Ragdoll } from "./ragdoll";
 import { Puppet } from "./puppet";
+import { GestureDetector } from "./user-gesture";
+import type { UserGesture, UserPose, UserEnergy } from "../server/protocol.ts";
 
 export type HandLabel = "Left" | "Right";
 export type HandData = { lm: NormalizedLandmarkList; world: LandmarkList };
@@ -83,6 +85,7 @@ export class UserPuppetController {
   };
   private ragdoll: Ragdoll;
   private wasVisible = false;
+  private detector = new GestureDetector();
 
   constructor(
     public readonly model: Puppet,
@@ -101,6 +104,27 @@ export class UserPuppetController {
   /** True once the smoothed visibility has crossed the show threshold. */
   get visible(): boolean {
     return this.smoothed.visible > 0.02;
+  }
+
+  /** Drain and return one-shot gestures detected since the last drain. */
+  drainGestures(): UserGesture[] {
+    return this.detector.drainGestures();
+  }
+
+  /** Sustained pose of this puppet (sticky). */
+  get pose(): UserPose {
+    return this.detector.pose;
+  }
+
+  /** Embodied energy hint derived from gestures + presence + pose. */
+  get energy(): UserEnergy {
+    return this.detector.energy;
+  }
+
+  /** Smoothed magnitude of recent palm motion. main.ts uses this to
+   *  pick the active puppet when both hands are visible. */
+  get recentMotion(): number {
+    return this.detector.recentMotion;
   }
 
   update(dt: number, data: HandData | null, view: ViewSize): void {
@@ -193,6 +217,18 @@ export class UserPuppetController {
       s.gazeX += (targetGazeX - s.gazeX) * GAZE_ALPHA;
       s.gazeY += (targetGazeY - s.gazeY) * GAZE_ALPHA;
       s.roll += (targetRoll - s.roll) * ROLL_ALPHA;
+
+      // Feed the gesture detector with post-smoothing values for mouth
+      // and roll so brief noise doesn't trigger sleeping/upside_down.
+      this.detector.observe({
+        lm: data.lm,
+        world: data.world,
+        mouthOpen: s.open,
+        roll: s.roll,
+        dt,
+      });
+    } else {
+      this.detector.notifyAbsent(dt);
     }
 
     const visible = this.visible;

@@ -1,4 +1,12 @@
-import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "./protocol.ts";
+import type {
+  Action,
+  ClientEvent,
+  ServerEvent,
+  UserEnergy,
+  UserGesture,
+  UserPose,
+  VoiceInfo,
+} from "./protocol.ts";
 import type { ChatMessage, LLMBackend } from "./llm.ts";
 import { CallBudget, type GlobalCeiling } from "./limits.ts";
 
@@ -8,7 +16,14 @@ Be warm, silly, and encouraging. Delight in anything the kid shows or says. Gent
 
 Spell words normally so the text-to-speech can pronounce them cleanly. Keep the energy in punctuation and exclamation marks instead of stretched vowels: write "Hi!" and "yay!", not "Hiiii" or "yaaay". No "aaah" or "oooh".
 
-Don't put stage directions inside "say". Stay in character.`;
+Don't put stage directions inside "say". Stay in character.
+
+Some user turns may include a "[signal: ...]" line summarizing what the user's puppet is physically doing — independent from the words (or stage note). Treat it as advisory cues, not commands:
+- gestures=[...] : one-shot actions during this turn. Wave back when they wave. Affirm warmly on thumbs_up. Comment playfully on jump/peace/point. Open_palm = welcoming.
+- pose=upside_down or pose=sleeping : the puppet is in a funny ongoing state. Worth a playful comment.
+- energy=low/med/high : how energetic their body is. Match it (calm with low, bouncy with high) or play off the contrast.
+
+You read the words yourself; the signal is just body language. Absent fields mean nothing notable.`;
 
 const IDLE_ESCALATION = [
   {
@@ -53,6 +68,13 @@ export class Session {
   // Avoid spamming rate-limit error events when many requests trip the
   // limit in quick succession; emit at most one every few seconds.
   private lastBudgetErrorAt = 0;
+
+  // Body-language signals from the client. Gestures buffer until the
+  // next LLM turn (transcript or escalation) drains them; pose and
+  // energy are sticky last-write-wins.
+  private pendingGestures: UserGesture[] = [];
+  private currentPose: UserPose | null = null;
+  private currentEnergy: UserEnergy | null = null;
 
   constructor(
     private llm: LLMBackend,
@@ -117,6 +139,18 @@ export class Session {
         }
         break;
       }
+      case "signal": {
+        // Body-language updates from the client — accumulate until the
+        // next LLM turn (transcript-final or idle escalation) consumes
+        // them. Don't note activity here: a silent gesture should still
+        // let escalation tick, so the AI can react to e.g. a wave-only.
+        if (event.gestures && event.gestures.length > 0) {
+          this.pendingGestures.push(...event.gestures);
+        }
+        if (event.pose !== undefined) this.currentPose = event.pose;
+        if (event.energy !== undefined) this.currentEnergy = event.energy;
+        break;
+      }
     }
   }
 
@@ -157,14 +191,24 @@ export class Session {
   }
 
   private prompt(turn: ChatMessage, origin: Origin) {
+    // Drain the body-language signal buffer into the turn content. Both
+    // user transcripts and stage-notes get the signal so the LLM has
+    // consistent context across turn types. Gestures drain; pose and
+    // energy persist for the next consumer.
+    const drained = this.pendingGestures;
+    this.pendingGestures = [];
+    const sig = composeSignalBlock(drained, this.currentPose, this.currentEnergy);
+    const augmented: ChatMessage =
+      sig && turn.role === "user" ? { role: "user", content: `${turn.content}\n${sig}` } : turn;
+
     if (this.inFlight) {
       // Collapse: queue the turn until the in-flight response commits.
       // Multiple turns queued during one in-flight window still produce
       // exactly one follow-up LLM call.
-      this.pendingTurns.push({ turn, origin });
+      this.pendingTurns.push({ turn: augmented, origin });
       return;
     }
-    this.history.push(turn);
+    this.history.push(augmented);
     this.trimHistory();
     this.currentCallOrigin = origin;
     this.userSpeakingDuringCall = false;
@@ -245,6 +289,22 @@ export class Session {
       this.history = [system, ...this.history.slice(-MAX_TURNS)];
     }
   }
+}
+
+function composeSignalBlock(
+  gestures: UserGesture[],
+  pose: UserPose | null,
+  energy: UserEnergy | null,
+): string | null {
+  // Only surface signals that carry information. pose=normal is the
+  // default state and adds nothing; absence is interpreted as "nothing
+  // notable" by the system prompt.
+  const parts: string[] = [];
+  if (gestures.length > 0) parts.push(`gestures=[${gestures.join(", ")}]`);
+  if (pose !== null && pose !== "normal") parts.push(`pose=${pose}`);
+  if (energy !== null) parts.push(`energy=${energy}`);
+  if (parts.length === 0) return null;
+  return `[signal: ${parts.join(", ")}]`;
 }
 
 function renderAssistant(action: Action): string {

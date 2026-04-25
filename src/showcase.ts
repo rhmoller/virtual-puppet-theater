@@ -60,7 +60,17 @@ resize();
 // --- State ---
 const EMOTIONS: Emotion[] = ["neutral", "smug", "curious", "excited", "bored", "surprised"];
 const GAZES: Gaze[] = ["user", "away", "up", "down"];
-const GESTURES: Gesture[] = ["none", "wave", "shrug", "lean_in", "nod", "shake"];
+const GESTURES: Gesture[] = [
+  "none",
+  "wave",
+  "shrug",
+  "lean_in",
+  "nod",
+  "shake",
+  "jump",
+  "spin",
+  "wiggle",
+];
 
 // Matches main.ts's GAZE_TO_BIAS.
 const GAZE_TO_BIAS: Record<Gaze, { x: number; y: number }> = {
