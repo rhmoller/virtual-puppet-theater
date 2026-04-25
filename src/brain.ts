@@ -1,4 +1,10 @@
-import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "../server/protocol.ts";
+import type {
+  Action,
+  AssetSpec,
+  ClientEvent,
+  ServerEvent,
+  VoiceInfo,
+} from "../server/protocol.ts";
 
 export type ConnState = "connected" | "reconnecting" | "disconnected";
 export type MicState = "unsupported" | "idle" | "listening" | "denied" | "error";
@@ -7,6 +13,7 @@ type Handlers = {
   onAction: (action: Action) => void;
   onCancelSpeech: () => void;
   onVoicePick: (voiceURI: string) => void;
+  onAssetReady?: (request_id: string, asset_name: string, spec: AssetSpec) => void;
   onConnection?: (state: ConnState) => void;
   onMicState?: (state: MicState) => void;
   onAiThinking?: (thinking: boolean) => void;
@@ -134,6 +141,9 @@ export class Brain {
           break;
         case "voice_pick":
           this.handlers.onVoicePick(msg.voiceURI);
+          break;
+        case "asset_ready":
+          this.handlers.onAssetReady?.(msg.request_id, msg.asset_name, msg.spec);
           break;
         case "error":
           // The server sends a turn-level error (e.g., rate limit or LLM
@@ -314,7 +324,12 @@ function formatServerEvent(event: ServerEvent): string {
   switch (event.type) {
     case "action": {
       const a = event.action;
-      const meta = [a.emotion, a.gaze && `gaze=${a.gaze}`, a.gesture && `gesture=${a.gesture}`]
+      const meta = [
+        a.emotion,
+        a.gaze && `gaze=${a.gaze}`,
+        a.gesture && `gesture=${a.gesture}`,
+        a.effects?.length ? `fx=${a.effects.length}` : null,
+      ]
         .filter(Boolean)
         .join(" ");
       return `action: ${JSON.stringify(a.say ?? "")}${meta ? ` [${meta}]` : ""}`;
@@ -325,6 +340,8 @@ function formatServerEvent(event: ServerEvent): string {
       return `error: ${event.message}`;
     case "voice_pick":
       return `voice_pick: ${event.voiceURI}`;
+    case "asset_ready":
+      return `asset_ready: ${event.asset_name} (req=${event.request_id}, parts=${event.spec.parts.length})`;
   }
 }
 

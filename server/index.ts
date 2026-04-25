@@ -1,6 +1,7 @@
 import type { BrainSize, ClientEvent, ServerEvent } from "./protocol.ts";
 import { AnthropicBackend } from "./llm.ts";
 import { Session } from "./session.ts";
+import { AssetGenerator } from "./asset-generator.ts";
 import {
   IpConnectionCounter,
   GlobalCeiling,
@@ -18,6 +19,10 @@ const MODEL_FOR_BRAIN: Record<BrainSize, string> = {
 // Shared abuse limits. Per-session budget is created inside each Session.
 const ipCounter = new IpConnectionCounter();
 const globalCeiling = new GlobalCeiling();
+// Shared asset designer — one per process so the cache is shared across
+// all sessions. Always uses Opus 4.7, regardless of any session's
+// brain-size toggle.
+const assetGenerator = new AssetGenerator();
 
 type SocketData = { session: Session; ip: string; brain: BrainSize };
 
@@ -75,7 +80,7 @@ const server = Bun.serve<SocketData, string>({
         ws.send(JSON.stringify(event));
       };
       const llm = new AnthropicBackend(MODEL_FOR_BRAIN[ws.data.brain]);
-      ws.data.session = new Session(llm, send, globalCeiling);
+      ws.data.session = new Session(llm, send, globalCeiling, assetGenerator);
       console.log(`[ws] open (brain=${ws.data.brain}, model=${llm.name})`);
     },
     message(ws, raw) {
@@ -124,7 +129,12 @@ function formatServerEvent(event: ServerEvent): string {
   switch (event.type) {
     case "action": {
       const a = event.action;
-      const meta = [a.emotion, a.gaze && `gaze=${a.gaze}`, a.gesture && `gesture=${a.gesture}`]
+      const meta = [
+        a.emotion,
+        a.gaze && `gaze=${a.gaze}`,
+        a.gesture && `gesture=${a.gesture}`,
+        a.effects?.length ? `fx=${a.effects.length}` : null,
+      ]
         .filter(Boolean)
         .join(" ");
       return `action: ${JSON.stringify(a.say ?? "")}${meta ? ` [${meta}]` : ""}`;
@@ -135,6 +145,8 @@ function formatServerEvent(event: ServerEvent): string {
       return `error: ${event.message}`;
     case "voice_pick":
       return `voice_pick: ${event.voiceURI}`;
+    case "asset_ready":
+      return `asset_ready: ${event.asset_name} (req=${event.request_id}, parts=${event.spec.parts.length})`;
   }
 }
 

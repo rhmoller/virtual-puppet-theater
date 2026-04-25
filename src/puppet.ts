@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Emotion, Gesture } from "../server/protocol.ts";
+import type { Emotion, Gesture, SlotName } from "../server/protocol.ts";
 import type { PuppetModel } from "./puppet-model";
 
 export type PuppetTheme = {
@@ -56,6 +56,9 @@ export class Puppet implements PuppetModel {
   private rightPupil: THREE.Mesh;
   private blinkT = -1;
   private nextBlink = 1.5 + Math.random() * 3;
+
+  // Cosmetic slot groups, lazily created.
+  private slotGroups: Partial<Record<SlotName, THREE.Group>> = {};
 
   constructor(theme: PuppetTheme) {
     const skin = new THREE.MeshStandardMaterial({ color: theme.skin, roughness: 0.85 });
@@ -232,6 +235,45 @@ export class Puppet implements PuppetModel {
   setEmotion(_emotion: Emotion) {}
   playGesture(_gesture: Gesture) {}
   setSpeaking(_on: boolean) {}
+
+  /** Returns a slot group on this hand-puppet for cosmetic mounting.
+   *  Head/eyes attach to the *upper jaw* — the half that doesn't move
+   *  when the mouth opens — so a hat doesn't bob with every "speech".
+   *  Hand slots attach inside the elbow groups so they ragdoll with
+   *  the lower arm. */
+  attach(slot: SlotName): THREE.Group {
+    const cached = this.slotGroups[slot];
+    if (cached) return cached;
+    const g = new THREE.Group();
+    switch (slot) {
+      case "head":
+        // Top of the skull, in upperJaw-local space.
+        g.position.set(0, 0.95, 0);
+        this.upperJaw.add(g);
+        break;
+      case "eyes":
+        // In front of the eye sockets.
+        g.position.set(0, 0.45, 0.95);
+        this.upperJaw.add(g);
+        break;
+      case "neck":
+        // Below the head, on the torso. The torso group sits at y=-1.
+        g.position.set(0, 0.05, 0);
+        this.torso.add(g);
+        break;
+      case "hand_left":
+        // Inside the elbow group, where the hand sphere is.
+        g.position.set(0, -1.05, 0);
+        this.leftElbow.add(g);
+        break;
+      case "hand_right":
+        g.position.set(0, -1.05, 0);
+        this.rightElbow.add(g);
+        break;
+    }
+    this.slotGroups[slot] = g;
+    return g;
+  }
 
   // Idle blink. Called per-frame while the puppet is visible.
   update(dt: number) {

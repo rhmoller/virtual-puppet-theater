@@ -81,6 +81,7 @@ export class AnthropicBackend implements LLMBackend {
       emotion: obj.emotion,
       gaze: obj.gaze,
       gesture: obj.gesture,
+      effects: Array.isArray(obj.effects) ? obj.effects : undefined,
     };
   }
 

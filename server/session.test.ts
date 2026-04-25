@@ -2,7 +2,13 @@ import { test, expect } from "bun:test";
 import { Session } from "./session.ts";
 import { GlobalCeiling } from "./limits.ts";
 import type { ChatMessage, LLMBackend } from "./llm.ts";
-import type { Action, ServerEvent } from "./protocol.ts";
+import type { Action, AssetSpec, ServerEvent } from "./protocol.ts";
+import type { AssetGenerator } from "./asset-generator.ts";
+
+// Stub for the asset designer — tests don't exercise asset generation.
+const fakeAssetGenerator: AssetGenerator = {
+  generate: async (_args: unknown): Promise<AssetSpec | null> => null,
+} as unknown as AssetGenerator;
 
 class FakeLLM implements LLMBackend {
   name = "fake";
@@ -49,7 +55,7 @@ const inspect = (s: Session) => s as unknown as SessionInternals;
 test("SESSION-1: a user turn arriving while in-flight is preserved for the next LLM call", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
 
   // Constructor fires an opening prompt — that call is now pending.
   await flush();
@@ -74,7 +80,7 @@ test("SESSION-1: a user turn arriving while in-flight is preserved for the next 
 test("SESSION-2: in-flight resolve triggers a follow-up for the newest user turn", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
   await flush();
 
   session.handle({ type: "transcript", text: "hi", final: true });
@@ -97,7 +103,7 @@ test("SESSION-2: in-flight resolve triggers a follow-up for the newest user turn
 test("SESSION-3: N user turns in one in-flight window produce exactly one follow-up", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
   await flush();
   expect(llm.calls.length).toBe(1);
 
@@ -124,7 +130,7 @@ test("SESSION-3: N user turns in one in-flight window produce exactly one follow
 test("SESSION-5: user_speaking during a stage-note call discards that response", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
 
   // Constructor fires the opening stage prompt — that call is now in-flight.
   await flush();
@@ -167,7 +173,7 @@ test("SESSION-5: user_speaking during a stage-note call discards that response",
 test("SESSION-6: signal events bake gestures + pose + energy into the next user turn", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
   await flush();
 
   // Pre-load body-language signals before the user speaks.
@@ -209,7 +215,7 @@ test("SESSION-6: signal events bake gestures + pose + energy into the next user 
 test("SESSION-7: idle escalation prompts include the latest pose + drained gestures", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
   await flush();
   expect(llm.calls.length).toBe(1);
 
@@ -243,7 +249,7 @@ test("SESSION-7: idle escalation prompts include the latest pose + drained gestu
 test("SESSION-4: idle-escalation ticks while in-flight collapse into one follow-up", async () => {
   const llm = new FakeLLM();
   const sent: ServerEvent[] = [];
-  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling());
+  const session = new Session(llm, (e) => sent.push(e), new GlobalCeiling(), fakeAssetGenerator);
   await flush();
   expect(llm.calls.length).toBe(1);
 

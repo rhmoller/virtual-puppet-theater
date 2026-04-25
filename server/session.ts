@@ -1,6 +1,7 @@
 import type {
   Action,
   ClientEvent,
+  Effect,
   ServerEvent,
   UserEnergy,
   UserGesture,
@@ -9,21 +10,98 @@ import type {
 } from "./protocol.ts";
 import type { ChatMessage, LLMBackend } from "./llm.ts";
 import { CallBudget, type GlobalCeiling } from "./limits.ts";
+import {
+  COSMETIC_NAMES,
+  SCENE_PROP_NAMES,
+  SLOT_NAMES,
+  ANCHOR_NAMES,
+} from "../src/assets/catalog.ts";
+import { SceneState, applyStateEffect } from "../src/scene-state.ts";
+import type { AssetGenerator } from "./asset-generator.ts";
 
-const SYSTEM_PROMPT = `You are Clawd, a cheerful, goofy hand-puppet in a small virtual theater. A kid on a webcam brings the other puppet to life with their hand.
+const SYSTEM_PROMPT = `You are Clawd, a cheerful, goofy hand-puppet AND the director of a small virtual co-creative theater. You wear two hats every turn:
 
-Be warm, silly, and encouraging. Delight in anything the kid shows or says. Gentle jokes, never sarcastic or scary. One or two short, bouncy sentences per turn — words a kid can follow.
+1. Performer — you speak ("say"), feel ("emotion"), look ("gaze"), and act ("gesture").
+2. Director — you change the stage with "effects": dressing puppets in hats and glasses, placing scenery props (sun, tree, sand_castle), and dreaming up brand-new items when the kid wants something the catalog doesn't have.
 
-Spell words normally so the text-to-speech can pronounce them cleanly. Keep the energy in punctuation and exclamation marks instead of stretched vowels: write "Hi!" and "yay!", not "Hiiii" or "yaaay". No "aaah" or "oooh".
+The two roles run TOGETHER. When the kid expresses a wish — "give Clawd a crown", "let's go to the beach", "I want sunglasses on my puppet", "I want a banana hat" — you DO it via effects, not just by talking about doing it. A turn that talks about a hat without emitting an effect is a missed opportunity. Saying "wow, sunglasses!" without dressing them onto a puppet is the wrong answer.
 
-Don't put stage directions inside "say". Stay in character.
+# Catalog (use these names verbatim in dress/place effects)
 
-Some user turns may include a "[signal: ...]" line summarizing what the user's puppet is physically doing — independent from the words (or stage note). Treat it as advisory cues, not commands:
-- gestures=[...] : one-shot actions during this turn. Wave back when they wave. Affirm warmly on thumbs_up. Comment playfully on jump/peace/point. Open_palm = welcoming.
-- pose=upside_down or pose=sleeping : the puppet is in a funny ongoing state. Worth a playful comment.
-- energy=low/med/high : how energetic their body is. Match it (calm with low, bouncy with high) or play off the contrast.
+COSMETICS (${COSMETIC_NAMES.length}): ${COSMETIC_NAMES.join(", ")}
 
-You read the words yourself; the signal is just body language. Absent fields mean nothing notable.`;
+SCENE PROPS (${SCENE_PROP_NAMES.length}): ${SCENE_PROP_NAMES.join(", ")}
+
+# Where things go
+
+PUPPETS (for "puppet" field): "left" = the kid's left hand-puppet, "right" = their right, "ai" = you (Clawd).
+COSMETIC SLOTS (for "slot" field): ${SLOT_NAMES.join(", ")}.
+SCENE ANCHORS (for "anchor" field): ${ANCHOR_NAMES.join(", ")}.
+
+# Effect schema
+
+Each effect is an object with all these keys (use null for keys not relevant to your op):
+{"op", "puppet", "slot", "anchor", "asset", "description", "request_id"}
+
+The four ops:
+
+- "dress" — put a cosmetic on a puppet (or asset:null to remove).
+  fields: puppet, slot, asset. Others null.
+- "place" — put a scene prop at an anchor (or asset:null to clear).
+  fields: anchor, asset. Others null.
+- "request_cosmetic" — when the kid wants a cosmetic NOT in the catalog.
+  fields: puppet, slot, description, request_id. Others null.
+  Use a short request_id like "r1", "r2".
+  ALSO say a short stall line in "say" ("Ooh, let me dream that up!") so the show doesn't go quiet — a designer agent is composing it in the background and it'll pop in a few seconds.
+- "request_prop" — same idea for novel scene props.
+  fields: anchor, description, request_id. Others null.
+
+# Worked examples (full flat shape — copy this style)
+
+Kid: "give Clawd a crown"
+  effects: [
+    {"op":"dress","puppet":"ai","slot":"head","anchor":null,"asset":"crown","description":null,"request_id":null}
+  ]
+  say: "A crown! For me?! Look at me, royal Clawd!"
+
+Kid: "let's go to the beach"
+  effects: [
+    {"op":"place","puppet":null,"slot":null,"anchor":"sky_center","asset":"sun","description":null,"request_id":null},
+    {"op":"place","puppet":null,"slot":null,"anchor":"ground_center","asset":"sand_castle","description":null,"request_id":null},
+    {"op":"place","puppet":null,"slot":null,"anchor":"ground_right","asset":"beach_ball","description":null,"request_id":null}
+  ]
+  say: "Beach time! Don't forget the sunscreen!"
+
+Kid: "I want sunglasses on my left puppet"
+  effects: [
+    {"op":"dress","puppet":"left","slot":"eyes","anchor":null,"asset":"sunglasses","description":null,"request_id":null}
+  ]
+  say: "Coooool. Looking sharp!"
+
+Kid: "I want a watermelon hat!"
+  effects: [
+    {"op":"request_cosmetic","puppet":"ai","slot":"head","anchor":null,"asset":null,"description":"a watermelon hat","request_id":"r1"}
+  ]
+  say: "Ooh, a watermelon hat?! Let me dream that up!"
+
+Kid: "we need a giant rubber duck in the sky"
+  effects: [
+    {"op":"request_prop","puppet":null,"slot":null,"anchor":"sky_center","asset":null,"description":"a giant yellow rubber duck","request_id":"r2"}
+  ]
+  say: "A giant rubber duck! Quack! Hold on, let me sketch it!"
+
+# Rules
+
+- Empty effects array is fine for chit-chat turns ("hi", "how are you?"). But the moment the kid wants something visible, EMIT THE EFFECT.
+- Keep effects ≤4 per turn so the stage reads.
+- The user message may end with a "[scene: ...]" line listing what's already on stage. Don't re-issue what's already there.
+- The user message may end with a "[signal: ...]" line summarizing the kid's body language (gestures, pose, energy). React to it as cues, not commands. Absent fields = nothing notable.
+
+# Voice
+
+Be warm, silly, encouraging. Delight in anything the kid shows or says. Gentle jokes, never sarcastic or scary. One or two short bouncy sentences per turn — words a kid can follow.
+
+Spell words normally so text-to-speech sounds clean. Use punctuation for energy: "Hi!" and "yay!", not "Hiiii". Don't put stage directions inside "say".`;
 
 const IDLE_ESCALATION = [
   {
@@ -76,10 +154,16 @@ export class Session {
   private currentPose: UserPose | null = null;
   private currentEnergy: UserEnergy | null = null;
 
+  // Mirror of the directed scene state. Updated whenever the LLM emits
+  // dress/place effects, used to inject [scene: ...] context into
+  // subsequent prompts so Claude doesn't re-issue what's already there.
+  private sceneState = new SceneState();
+
   constructor(
     private llm: LLMBackend,
     private send: (event: ServerEvent) => void,
     private global: GlobalCeiling,
+    private assetGenerator: AssetGenerator,
   ) {
     this.scheduleIdleCheck();
     // Fire an opening line so Clawd greets the user.
@@ -198,8 +282,15 @@ export class Session {
     const drained = this.pendingGestures;
     this.pendingGestures = [];
     const sig = composeSignalBlock(drained, this.currentPose, this.currentEnergy);
+    // Snapshot the current directed-scene state so Claude doesn't try to
+    // re-place items already on stage. Empty scene → no block at all.
+    const sceneSummary = this.sceneState.describe();
+    const sceneLine = sceneSummary === "empty" ? null : `[scene: ${sceneSummary}]`;
+    const annotations = [sceneLine, sig].filter(Boolean).join("\n");
     const augmented: ChatMessage =
-      sig && turn.role === "user" ? { role: "user", content: `${turn.content}\n${sig}` } : turn;
+      annotations && turn.role === "user"
+        ? { role: "user", content: `${turn.content}\n${annotations}` }
+        : turn;
 
     if (this.inFlight) {
       // Collapse: queue the turn until the in-flight response commits.
@@ -242,9 +333,27 @@ export class Session {
           // doesn't see a hanging unanswered prompt.
           this.history.length = callStartLen - 1;
         } else {
+          // Mirror the action's scene effects into the server-side scene
+          // state BEFORE forwarding to the client so the next prompt's
+          // [scene: ...] line reflects what we just told Claude to do.
+          if (action.effects && action.effects.length > 0) {
+            console.log(
+              "[session] effects:",
+              JSON.stringify(action.effects),
+            );
+            for (const eff of action.effects) applyStateEffect(this.sceneState, eff);
+          } else {
+            console.log("[session] no effects this turn");
+          }
           const assistantText = renderAssistant(action);
           this.history.push({ role: "assistant", content: assistantText });
           this.send({ type: "action", action });
+          // Fire any asset-design requests in parallel. The conversation
+          // continues immediately; asset_ready arrives on its own event
+          // when the design agent completes.
+          if (action.effects && action.effects.length > 0) {
+            this.dispatchAssetRequests(action.effects);
+          }
         }
 
         if (this.pendingTurns.length === 0) break;
@@ -261,6 +370,46 @@ export class Session {
       this.send({ type: "error", message: String(err) });
     } finally {
       this.inFlight = false;
+    }
+  }
+
+  /** Kick off the parallel asset designer for any request_* effects in
+   *  the just-emitted action. Each runs independently so a slow one
+   *  doesn't block the others or the conversation thread. On success,
+   *  push asset_ready to the client and update server-side scene state
+   *  so the next [scene: ...] block knows the new asset exists. */
+  private dispatchAssetRequests(effects: ReadonlyArray<Effect>) {
+    for (const eff of effects) {
+      if (eff.op === "request_cosmetic") {
+        // Required fields per the wire contract; skip if Claude left
+        // them out (the flat schema can't enforce per-op requireds).
+        if (!eff.puppet || !eff.slot || !eff.description || !eff.request_id) continue;
+        const puppet = eff.puppet;
+        const slot = eff.slot;
+        const description = eff.description;
+        const request_id = eff.request_id;
+        void this.assetGenerator
+          .generate({ description, mountKind: "cosmetic", slotOrAnchor: slot })
+          .then((spec) => {
+            if (!spec) return;
+            const assetName = nameFromDescription(description);
+            this.sceneState.dress(puppet, slot, assetName);
+            this.send({ type: "asset_ready", request_id, asset_name: assetName, spec });
+          });
+      } else if (eff.op === "request_prop") {
+        if (!eff.anchor || !eff.description || !eff.request_id) continue;
+        const anchor = eff.anchor;
+        const description = eff.description;
+        const request_id = eff.request_id;
+        void this.assetGenerator
+          .generate({ description, mountKind: "prop", slotOrAnchor: anchor })
+          .then((spec) => {
+            if (!spec) return;
+            const assetName = nameFromDescription(description);
+            this.sceneState.place(anchor, assetName);
+            this.send({ type: "asset_ready", request_id, asset_name: assetName, spec });
+          });
+      }
     }
   }
 
@@ -289,6 +438,17 @@ export class Session {
       this.history = [system, ...this.history.slice(-MAX_TURNS)];
     }
   }
+}
+
+function nameFromDescription(d: string): string {
+  return (
+    d
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "asset"
+  );
 }
 
 function composeSignalBlock(

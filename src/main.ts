@@ -18,7 +18,16 @@ import { showLanding } from "./landing";
 import { Hud } from "./hud";
 import { UserPuppetController, type HandData, type HandLabel } from "./user-controller";
 import { AiPuppetController } from "./ai-controller";
-import type { UserGesture, UserPose, UserEnergy } from "../server/protocol.ts";
+import { SceneController } from "./scene-controller";
+import { SceneState } from "./scene-state";
+import type {
+  AnchorName,
+  PuppetId,
+  SlotName,
+  UserGesture,
+  UserPose,
+  UserEnergy,
+} from "../server/protocol.ts";
 
 declare global {
   interface Window {
@@ -93,6 +102,20 @@ const aiController = new AiPuppetController(stagePuppet, {
   depthScale: PUPPET_DEPTH_SCALE,
   speak,
 });
+
+// Scene state + controller for cosmetics and scene props directed by
+// the LLM. The slot and anchor resolvers map PuppetId/SlotName ↔ the
+// actual THREE.Group attach points exposed by the rigs and theater.
+const sceneState = new SceneState();
+const sceneController = new SceneController(
+  sceneState,
+  (puppet: PuppetId, slot: SlotName) => {
+    if (puppet === "ai") return stagePuppet.attach(slot);
+    const c = userControllers.find((uc) => uc.hand === (puppet === "left" ? "Left" : "Right"));
+    return c ? c.model.attach(slot) : null;
+  },
+  (anchor: AnchorName) => theater.anchor(anchor),
+);
 
 // theater.layout rebuilds ~100 merged bead geometries + curtains — too
 // expensive to run on every drag-resize event. Coalesce with a 120ms
@@ -277,8 +300,18 @@ showLanding().then(async ({ stream, userPickedVoiceURI, brainSize }) => {
 
   const wsProto = location.protocol === "https:" ? "wss" : "ws";
   const b = new Brain(`${wsProto}://${location.host}/ws?brain=${brainSize}`, {
-    onAction: (action) => aiController.applyAction(action),
+    onAction: (action) => {
+      // Embodiment fields (say/emotion/gaze/gesture) go to the AI puppet
+      // controller; scene-direction effects go to the SceneController.
+      aiController.applyAction(action);
+      if (action.effects && action.effects.length > 0) {
+        sceneController.applyEffects(action.effects);
+      }
+    },
     onCancelSpeech: cancelSpeech,
+    onAssetReady: (request_id, asset_name, spec) => {
+      sceneController.registerGenerated(request_id, asset_name, spec);
+    },
     onVoicePick: (uri) => {
       if (userVoiceLocked) return;
       setSelectedVoice(uri);

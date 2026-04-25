@@ -11,9 +11,27 @@ const WOOD = 0x5a2a18;
 const WOOD_DARK = 0x2e1408;
 const BACKDROP = 0x120505;
 
+// Named regions where Claude can place scene props. Coordinates are
+// in world space (the theater root sits at the origin). Sized so sky
+// items read as far away and ground items as up-close, while still
+// fitting inside the proscenium frame.
+const ANCHOR_POSITIONS: Record<string, [number, number, number]> = {
+  sky_left: [-3, 2.0, -3],
+  sky_center: [0, 2.5, -3],
+  sky_right: [3, 2.0, -3],
+  ground_left: [-2.8, -1.5, -1.5],
+  ground_center: [0, -1.7, -1.5],
+  ground_right: [2.8, -1.5, -1.5],
+  far_back: [0, 0, -3.5],
+};
+
 export class Theater {
   readonly root = new THREE.Group();
   private group = new THREE.Group();
+  // Anchor groups for scene props. Not inside `this.group` because
+  // `layout()` calls `this.group.clear()` on resize, which would
+  // wipe any mounted props. Anchors live directly on `this.root`.
+  private anchors: Record<string, THREE.Group> = {};
 
   private mGold = new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.35, metalness: 0.5 });
   private mGoldHi = new THREE.MeshStandardMaterial({
@@ -47,6 +65,18 @@ export class Theater {
 
   constructor() {
     this.root.add(this.group);
+    for (const [name, [x, y, z]] of Object.entries(ANCHOR_POSITIONS)) {
+      const g = new THREE.Group();
+      g.position.set(x, y, z);
+      this.anchors[name] = g;
+      this.root.add(g);
+    }
+  }
+
+  /** Returns the named scene-prop anchor Group. SceneController mounts
+   *  pre-fab and generated scene props inside these. */
+  anchor(name: string): THREE.Group | null {
+    return this.anchors[name] ?? null;
   }
 
   layout(w: number, h: number) {

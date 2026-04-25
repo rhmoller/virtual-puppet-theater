@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Emotion, Gesture } from "../server/protocol.ts";
+import type { Emotion, Gesture, SlotName } from "../server/protocol.ts";
 import type { PuppetModel } from "./puppet-model";
 
 // Palette. Deliberately non-naturalistic; see docs/specs/new-puppet.md for
@@ -259,6 +259,10 @@ export class StagePuppet implements PuppetModel {
   private glanceX = 0;
   private glanceY = 0;
 
+  // Slot groups for cosmetics. Lazily created on first attach() so we
+  // don't litter empty Groups on rigs that never get dressed.
+  private slotGroups: Partial<Record<SlotName, THREE.Group>> = {};
+
   constructor() {
     const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.85 });
     const shirt = new THREE.MeshStandardMaterial({ color: SHIRT, roughness: 0.9 });
@@ -417,6 +421,45 @@ export class StagePuppet implements PuppetModel {
 
   setRoll(rad: number) {
     this.root.rotation.z = rad;
+  }
+
+  /** Returns a slot group at the named cosmetic anchor on this rig.
+   *  The SceneController mounts asset meshes inside the slot group;
+   *  gestures and idle motion rotate the slot's *parent*, so contents
+   *  follow naturally without animation conflict. */
+  attach(slot: SlotName): THREE.Group {
+    const cached = this.slotGroups[slot];
+    if (cached) return cached;
+    const g = new THREE.Group();
+    switch (slot) {
+      case "head":
+        // Top of the skull: above the hair cap.
+        g.position.set(0, 0.6, 0);
+        this.head.add(g);
+        break;
+      case "eyes":
+        // Just in front of the eye line, between the pupils.
+        g.position.set(0, 0.12, 1.05);
+        this.head.add(g);
+        break;
+      case "neck":
+        // Between yoke and head. bodyGroup-relative; the neck mesh sits
+        // around y = 0.2 in the same group.
+        g.position.set(0, 0.25, 0.05);
+        this.bodyGroup.add(g);
+        break;
+      case "hand_left":
+        // Inside the left arm group; hand mesh is at y = -1.15.
+        g.position.set(-0.12, -1.15, 0);
+        this.leftArm.add(g);
+        break;
+      case "hand_right":
+        g.position.set(0.12, -1.15, 0);
+        this.rightArm.add(g);
+        break;
+    }
+    this.slotGroups[slot] = g;
+    return g;
   }
 
   setGaze(gx: number, gy: number) {
