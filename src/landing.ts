@@ -95,9 +95,13 @@ export function showLanding(): Promise<LandingResult> {
       sttBtn.disabled = true;
       sttBtn.textContent = "Microphone unavailable";
     } else {
-      setSttStatus("Tap Test microphone, then speak.", "pending");
+      const sttLang = navigator.language || "en-US";
+      setSttStatus(`Tap Test microphone, then speak (${sttLang}).`, "pending");
       const rec = new Ctor();
-      rec.lang = "en-US";
+      // Use the browser's preferred locale instead of hardcoding en-US.
+      // Phones in non-English locales (e.g. da-DK) get "nomatch" instead
+      // of a transcript when forced to en-US, even for clear speech.
+      rec.lang = sttLang;
       // Android Chrome silently drops onresult when continuous=true.
       // Keep single-utterance mode and let onend auto-restart between
       // turns; behavior on desktop is equivalent, just with more
@@ -137,7 +141,7 @@ export function showLanding(): Promise<LandingResult> {
       let finalText = "";
       rec.onstart = () => {
         recRunning = true;
-        setSttStatus("Listening — say something.", "ok");
+        setSttStatus(`Listening in ${sttLang} — say something.`, "ok");
         logEvent("start");
       };
       rec.onresult = (ev) => {

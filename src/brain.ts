@@ -169,7 +169,11 @@ export class Brain {
       return;
     }
     const rec = new Ctor();
-    rec.lang = "en-US";
+    // Use the browser's preferred locale; hardcoding en-US causes
+    // "nomatch" for non-English-locale phones (e.g. da-DK) even when
+    // the user speaks clearly. The server prompts Claude in English
+    // regardless, but Claude handles multilingual transcripts fine.
+    rec.lang = (typeof navigator !== "undefined" && navigator.language) || "en-US";
     // Android Chrome silently drops onresult when continuous=true. Use
     // single-utterance mode; onend auto-restarts so the perceived
     // behavior on desktop is the same.
