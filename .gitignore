@@ -6,4 +6,5 @@ dist
 .idea
 .vscode
 docs/specs/
+docs/hackathon-brief.md
 .claude/
