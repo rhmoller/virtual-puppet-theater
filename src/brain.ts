@@ -1,9 +1,16 @@
 import type { Action, ClientEvent, ServerEvent, VoiceInfo } from "../server/protocol.ts";
 
+export type ConnState = "connected" | "reconnecting" | "disconnected";
+export type MicState = "unsupported" | "idle" | "listening" | "denied" | "error";
+
 type Handlers = {
   onAction: (action: Action) => void;
   onCancelSpeech: () => void;
   onVoicePick: (voiceURI: string) => void;
+  onConnection?: (state: ConnState) => void;
+  onMicState?: (state: MicState) => void;
+  onAiThinking?: (thinking: boolean) => void;
+  onServerError?: (message: string) => void;
 };
 
 export class Brain {
@@ -98,6 +105,7 @@ export class Brain {
       this.reconnectDelay = 500;
       if (this.clientReady) this.send({ type: "hello" });
       this.flushVoiceList();
+      this.handlers.onConnection?.("connected");
     });
     ws.addEventListener("message", (ev) => {
       let msg: ServerEvent;
@@ -109,6 +117,7 @@ export class Brain {
       console.log("[ws ←]", formatServerEvent(msg));
       switch (msg.type) {
         case "action":
+          this.handlers.onAiThinking?.(false);
           this.handlers.onAction(msg.action);
           break;
         case "cancel_speech":
@@ -118,6 +127,11 @@ export class Brain {
           this.handlers.onVoicePick(msg.voiceURI);
           break;
         case "error":
+          // The server sends a turn-level error (e.g., rate limit or LLM
+          // failure). Drop the "thinking" indicator since no action is
+          // coming for this turn, and surface a soft message.
+          this.handlers.onAiThinking?.(false);
+          this.handlers.onServerError?.(msg.message);
           console.warn("[brain] server error:", msg.message);
           break;
       }
@@ -127,6 +141,7 @@ export class Brain {
       if (this.stopped) return;
       const delay = this.reconnectDelay;
       this.reconnectDelay = Math.min(delay * 2, 8000);
+      this.handlers.onConnection?.("reconnecting");
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
         this.connect();
@@ -150,12 +165,18 @@ export class Brain {
         .webkitSpeechRecognition;
     if (!Ctor) {
       console.warn("[brain] SpeechRecognition not available in this browser");
+      this.handlers.onMicState?.("unsupported");
       return;
     }
     const rec = new Ctor();
     rec.lang = "en-US";
     rec.continuous = true;
     rec.interimResults = true;
+
+    // Permanent denial after permission errors — stop trying to restart.
+    let micDenied = false;
+    let sttBackoff = 500;
+
     rec.onresult = (ev) => {
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const result = ev.results[i];
@@ -174,23 +195,37 @@ export class Brain {
         if (!final && text.trim().length > 0) {
           this.send({ type: "user_speaking", speaking: true });
         }
+        // A final transcript means the server is about to call Claude.
+        if (final) this.handlers.onAiThinking?.(true);
       }
     };
     rec.onend = () => {
       console.log("[stt] end");
-      if (this.stopped) return;
-      // Auto-restart — continuous mode ends itself periodically.
-      try {
-        rec.start();
-      } catch {
-        /* already started */
-      }
+      if (this.stopped || micDenied) return;
+      // Auto-restart — continuous mode ends itself periodically. Use a
+      // small backoff so a tight error/end loop doesn't spin the CPU.
+      const delay = sttBackoff;
+      sttBackoff = Math.min(sttBackoff * 2, 8000);
+      setTimeout(() => {
+        if (this.stopped || micDenied) return;
+        try {
+          rec.start();
+        } catch {
+          /* already started */
+        }
+      }, delay);
     };
     rec.onerror = (ev: { error?: string }) => {
-      console.warn("[stt] error:", ev.error);
-      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
-        console.warn("[brain] mic permission denied");
+      const e = ev.error;
+      console.warn("[stt] error:", e);
+      if (e === "not-allowed" || e === "service-not-allowed") {
+        micDenied = true;
+        this.handlers.onMicState?.("denied");
+      } else if (e === "network" || e === "audio-capture") {
+        this.handlers.onMicState?.("error");
+        // onend fires after onerror; the backoff in onend handles restart.
       }
+      // no-speech / aborted are normal lulls; let onend silently restart.
     };
     // Lifecycle events not in the minimal ambient type — attach via cast.
     const extra = rec as unknown as {
@@ -203,9 +238,16 @@ export class Brain {
       onspeechend: (() => void) | null;
       onnomatch: (() => void) | null;
     };
-    extra.onstart = () => console.log("[stt] start");
+    extra.onstart = () => {
+      console.log("[stt] start");
+      sttBackoff = 500; // reset backoff once we successfully start.
+      if (!micDenied) this.handlers.onMicState?.("listening");
+    };
     extra.onaudiostart = () => console.log("[stt] audiostart");
-    extra.onaudioend = () => console.log("[stt] audioend");
+    extra.onaudioend = () => {
+      console.log("[stt] audioend");
+      if (!micDenied) this.handlers.onMicState?.("idle");
+    };
     extra.onsoundstart = () => console.log("[stt] soundstart");
     extra.onsoundend = () => console.log("[stt] soundend");
     extra.onspeechstart = () => console.log("[stt] speechstart");
@@ -214,7 +256,9 @@ export class Brain {
     this.stt = rec;
 
     // Mic requires a user gesture on most browsers — arm a one-shot starter.
+    // The landing page's Start button satisfies this gesture.
     const startOnGesture = () => {
+      if (micDenied) return;
       console.log("[stt] requesting start (user gesture)");
       try {
         rec.start();
@@ -222,8 +266,14 @@ export class Brain {
         console.log("[stt] start() threw:", err);
       }
     };
-    window.addEventListener("pointerdown", startOnGesture, { once: true });
-    window.addEventListener("keydown", startOnGesture, { once: true });
+    // Try immediately — if Brain is started after the user has already
+    // interacted (e.g. via the landing's Start button), this just works.
+    try {
+      rec.start();
+    } catch {
+      window.addEventListener("pointerdown", startOnGesture, { once: true });
+      window.addEventListener("keydown", startOnGesture, { once: true });
+    }
   }
 }
 

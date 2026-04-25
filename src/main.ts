@@ -20,7 +20,8 @@ import {
   setSelectedVoice,
   setSpeakingCallback,
 } from "./speech";
-import { announceWelcome } from "./welcome";
+import { showLanding } from "./landing";
+import { Hud } from "./hud";
 import type { Action, Gaze } from "../server/protocol.ts";
 
 declare global {
@@ -31,6 +32,7 @@ declare global {
 
 const video = document.getElementById("video") as HTMLVideoElement;
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
+const hud = new Hud();
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -306,43 +308,29 @@ hands.setOptions({
   minTrackingConfidence: 0.5,
 });
 
+let lastTracking = false;
 hands.onResults((results: Results) => {
   handData.Left = null;
   handData.Right = null;
-  if (!results.multiHandLandmarks || !results.multiHandedness) return;
-  for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-    const lm = results.multiHandLandmarks[i];
-    const world = results.multiHandWorldLandmarks?.[i];
-    const label = results.multiHandedness[i]?.label as "Left" | "Right" | undefined;
-    if (lm && world && label && !handData[label]) {
-      handData[label] = { lm, world };
+  if (results.multiHandLandmarks && results.multiHandedness) {
+    for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+      const lm = results.multiHandLandmarks[i];
+      const world = results.multiHandWorldLandmarks?.[i];
+      const label = results.multiHandedness[i]?.label as "Left" | "Right" | undefined;
+      if (lm && world && label && !handData[label]) {
+        handData[label] = { lm, world };
+      }
     }
   }
-});
-
-const loader = document.getElementById("loader")!;
-const loaderBar = loader.querySelector(".loader-bar") as HTMLDivElement;
-const loaderStart = performance.now();
-let ready = false;
-let displayed = 0;
-
-function tickLoader() {
-  const elapsed = (performance.now() - loaderStart) / 1000;
-  const target = ready ? 100 : 90 * (1 - Math.exp(-elapsed / 1.8));
-  displayed += (target - displayed) * 0.18;
-  loaderBar.style.width = `${Math.min(100, displayed).toFixed(1)}%`;
-  if (ready && displayed > 99.5) {
-    loaderBar.style.width = "100%";
-    loader.classList.add("done");
-    setTimeout(() => {
-      loader.remove();
-      announceWelcome();
-    }, 500);
-    return;
+  const tracking = !!handData.Left || !!handData.Right;
+  if (tracking !== lastTracking) {
+    lastTracking = tracking;
+    hud.setCamera(
+      tracking ? "ok" : "warn",
+      tracking ? "Tracking hand" : "Camera ready — show a hand",
+    );
   }
-  requestAnimationFrame(tickLoader);
-}
-tickLoader();
+});
 
 function updateStagePuppet(dt: number) {
   const leftPresent = handData.Left !== null;
@@ -434,7 +422,10 @@ requestAnimationFrame(frame);
 // Brain wiring — TTS, emotion/gesture dispatch, WebSocket.
 
 installSpeechUnlock();
-setSpeakingCallback((on) => stagePuppet.setSpeaking(on));
+setSpeakingCallback((on) => {
+  stagePuppet.setSpeaking(on);
+  hud.setAi(on ? "speaking" : "idle");
+});
 
 const GAZE_TO_BIAS: Record<Gaze, { x: number; y: number }> = {
   user: { x: 0, y: 0 },
@@ -455,39 +446,68 @@ function applyAction(action: Action) {
   if (action.say) speak(action.say);
 }
 
+// If the user picks a voice on the landing page, suppress the server's
+// pick — their explicit choice should win.
+let userVoiceLocked = false;
+
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const brain = new Brain(`${wsProto}://${location.host}/ws`, {
   onAction: applyAction,
   onCancelSpeech: cancelSpeech,
-  onVoicePick: setSelectedVoice,
+  onVoicePick: (uri) => {
+    if (userVoiceLocked) return;
+    setSelectedVoice(uri);
+  },
+  onConnection: (state) => hud.setConnection(state),
+  onMicState: (state) => {
+    if (state === "listening") hud.setMic("ok", "Microphone listening");
+    else if (state === "idle") hud.setMic("warn", "Microphone armed (silent)");
+    else if (state === "denied") hud.setMic("err", "Microphone blocked — enable it in your browser");
+    else if (state === "unsupported") hud.setMic("err", "Speech input needs Chrome or Edge");
+    else hud.setMic("err", "Microphone error");
+  },
+  onAiThinking: (thinking) => {
+    if (thinking) hud.setAi("thinking");
+    // 'speaking' / 'idle' are driven by the TTS callback above.
+  },
+  onServerError: (msg) => {
+    if (/rate|limit|budget/i.test(msg)) {
+      hud.toast("AI is taking a quick break — try again in a moment.");
+    } else {
+      hud.toast("AI hiccup — try again.");
+    }
+  },
 });
-brain.start();
 
-// Ask the server (via Claude) to pick a TTS voice once the browser's
-// voice list has loaded. Brain buffers until the WS is open.
-onVoicesReady(() => {
-  const voices = snapshotVoices();
-  if (voices && voices.length > 0) brain.sendVoiceList(voices);
-});
-
-// Kick off camera + MediaPipe asynchronously so rendering isn't blocked if
-// camera permission is denied or MediaPipe fails to load.
-(async () => {
-  // Safety timeout so a hung init doesn't leave the user stuck on the loader.
-  const timeout = setTimeout(() => {
-    ready = true;
-  }, 4000);
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("no getUserMedia");
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
-    await hands.initialize();
-    cameraReady = true;
-  } catch (err) {
-    console.warn("Camera unavailable:", err);
+// Landing page owns the camera/mic/TTS preflight. Once the user clicks
+// Start, we hand the already-acquired stream to the theater pipeline so
+// no second permission prompt is needed.
+showLanding().then(async ({ stream, userPickedVoiceURI }) => {
+  if (userPickedVoiceURI) {
+    userVoiceLocked = true;
+    setSelectedVoice(userPickedVoiceURI);
   }
-  clearTimeout(timeout);
-  ready = true;
+
+  hud.setConnection("reconnecting");
+  brain.start();
+  onVoicesReady(() => {
+    const voices = snapshotVoices();
+    if (voices && voices.length > 0) brain.sendVoiceList(voices);
+  });
+
+  if (stream) {
+    video.srcObject = stream;
+    try {
+      await video.play();
+      await hands.initialize();
+      cameraReady = true;
+      hud.setCamera("warn", "Camera ready — show a hand");
+    } catch (err) {
+      console.warn("Camera/MediaPipe init failed:", err);
+      hud.setCamera("err", "Camera init failed");
+    }
+  } else {
+    hud.setCamera("err", "Camera unavailable");
+  }
   brain.markReady();
-})();
+});

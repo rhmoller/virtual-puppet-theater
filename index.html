@@ -59,48 +59,254 @@
         background: transparent;
       }
 
-      #loader {
+      /* ---------- Landing ---------- */
+      #landing {
         position: fixed;
         inset: 0;
+        z-index: 20;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: #000;
-        z-index: 10;
+        background: radial-gradient(circle at center, #15141a 0%, #050507 70%);
         transition: opacity 0.4s ease-out;
       }
-      #loader.done {
+      #landing.hidden {
         opacity: 0;
         pointer-events: none;
       }
-      .loader-label {
-        margin-bottom: 18px;
+      .landing-card {
+        width: min(560px, calc(100vw - 32px));
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+        padding: 28px 32px 24px;
+        background: #0e0d12;
+        border: 1px solid #2a2731;
+        border-radius: 10px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+      }
+      .landing-title {
+        font-size: 20px;
+        letter-spacing: 0.5px;
+        color: #e8e3d8;
+        margin: 0 0 4px;
+      }
+      .landing-sub {
         font-size: 12px;
-        letter-spacing: 2px;
+        letter-spacing: 1.5px;
         text-transform: uppercase;
-        color: #888;
+        color: #7c7388;
+        margin: 0 0 20px;
       }
-      .loader-track {
-        width: 280px;
-        height: 4px;
-        background: #1a1a1a;
-        border-radius: 2px;
-        overflow: hidden;
+      .landing-section {
+        margin-bottom: 18px;
       }
-      .loader-bar {
-        height: 100%;
-        width: 0%;
+      .landing-section h3 {
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: #b8a48a;
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      #landing-camera-preview {
+        width: 100%;
+        max-width: 220px;
+        aspect-ratio: 4 / 3;
+        background: #060509;
+        border: 1px solid #2a2731;
+        border-radius: 6px;
+        transform: scaleX(-1);
+        object-fit: cover;
+        display: block;
+      }
+      #landing-stt-text {
+        width: 100%;
+        height: 60px;
+        background: #060509;
+        color: #d8cfe2;
+        border: 1px solid #2a2731;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 13px;
+        resize: none;
+        box-sizing: border-box;
+      }
+      .landing-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .status {
+        font-size: 12px;
+        margin-top: 6px;
+        line-height: 1.4;
+      }
+      .status.pending { color: #8d839b; }
+      .status.ok      { color: #7fb3a0; }
+      .status.warn    { color: #d4a85a; }
+      .status.err     { color: #d8745f; }
+      button.landing-btn,
+      select.landing-select {
+        background: #1c1924;
+        color: #e8e3d8;
+        border: 1px solid #38323f;
+        border-radius: 6px;
+        padding: 7px 14px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      button.landing-btn:hover:not(:disabled),
+      select.landing-select:hover {
+        background: #26222e;
+        border-color: #4a424f;
+      }
+      button.landing-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      #landing-start {
+        display: block;
+        width: 100%;
+        margin-top: 12px;
+        padding: 12px 18px;
+        font-size: 14px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
         background: linear-gradient(90deg, #d98b4f, #7fb3a0);
-        transition: width 0.15s linear;
+        color: #0a0a0c;
+        border: 0;
+        font-weight: 600;
+      }
+      #landing-start:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+
+      /* ---------- HUD ---------- */
+      #hud {
+        position: fixed;
+        bottom: 12px;
+        right: 12px;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        pointer-events: none;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      .hud-bar {
+        display: flex;
+        gap: 12px;
+        padding: 6px 10px;
+        background: rgba(10, 9, 14, 0.7);
+        border: 1px solid #2a2731;
+        border-radius: 6px;
+        font-size: 10px;
+        letter-spacing: 1.5px;
+        color: #b8a48a;
+        backdrop-filter: blur(6px);
+      }
+      .hud-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .hud-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4a424f;
+        transition: background 0.2s, box-shadow 0.2s;
+      }
+      .hud-dot[data-status="ok"] {
+        background: #7fb3a0;
+        box-shadow: 0 0 6px rgba(127, 179, 160, 0.6);
+      }
+      .hud-dot[data-status="warn"] {
+        background: #d4a85a;
+        box-shadow: 0 0 6px rgba(212, 168, 90, 0.6);
+      }
+      .hud-dot[data-status="err"] {
+        background: #d8745f;
+        box-shadow: 0 0 6px rgba(216, 116, 95, 0.6);
+      }
+      .hud-banner {
+        padding: 6px 12px;
+        background: rgba(60, 30, 12, 0.85);
+        border: 1px solid #6a4020;
+        border-radius: 6px;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        color: #f1d8b8;
+        max-width: 280px;
+      }
+      .hud-banner[hidden] {
+        display: none;
+      }
+      .hud-toasts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-end;
+      }
+      .hud-toast {
+        padding: 7px 12px;
+        background: rgba(20, 18, 26, 0.92);
+        border: 1px solid #38323f;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #e8e3d8;
+        max-width: 280px;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.25s, transform 0.25s;
+      }
+      .hud-toast.show {
+        opacity: 1;
+        transform: translateY(0);
       }
     </style>
   </head>
   <body>
-    <div id="loader">
-      <div class="loader-label">Loading puppets</div>
-      <div class="loader-track"><div class="loader-bar"></div></div>
+    <div id="landing">
+      <div class="landing-card">
+        <h1 class="landing-title">Virtual Puppet Theater</h1>
+        <p class="landing-sub">Pre-flight check</p>
+
+        <section class="landing-section">
+          <h3>Camera</h3>
+          <video id="landing-camera-preview" playsinline muted></video>
+          <div id="landing-camera-status" class="status pending">Requesting camera…</div>
+        </section>
+
+        <section class="landing-section">
+          <h3>Microphone</h3>
+          <div id="landing-stt-status" class="status pending">Checking speech recognition…</div>
+          <textarea
+            id="landing-stt-text"
+            readonly
+            placeholder="Speak — what we hear appears here."
+          ></textarea>
+        </section>
+
+        <section class="landing-section">
+          <h3>Voice</h3>
+          <div class="landing-row">
+            <button id="landing-tts-btn" class="landing-btn" type="button">Say hello</button>
+            <select id="landing-voice-select" class="landing-select" aria-label="AI puppet voice">
+              <option value="">Auto (AI picks)</option>
+            </select>
+          </div>
+        </section>
+
+        <button id="landing-start" type="button" disabled>Start the show</button>
+      </div>
     </div>
+
     <video id="video" playsinline></video>
     <canvas id="landmark-canvas"></canvas>
     <canvas id="scene"></canvas>
