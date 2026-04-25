@@ -6,7 +6,7 @@ import type {
   LandmarkList,
 } from "@mediapipe/hands";
 import { StagePuppet } from "./puppet-stage";
-import { Puppet } from "./puppet";
+import { Puppet, PUPPET_THEMES, type PuppetTheme } from "./puppet";
 import { Ragdoll } from "./ragdoll";
 import { Theater } from "./theater";
 import { Brain } from "./brain";
@@ -65,12 +65,12 @@ fill.position.set(-4, -1, 3);
 scene.add(fill);
 
 type HandLabel = "Left" | "Right";
-const puppetSpecs: { hand: HandLabel; color: number }[] = [
-  { hand: "Left", color: 0xd98b4f },
-  { hand: "Right", color: 0x7fb3a0 },
+const puppetSpecs: { hand: HandLabel; theme: PuppetTheme }[] = [
+  { hand: "Left", theme: PUPPET_THEMES.warm },
+  { hand: "Right", theme: PUPPET_THEMES.cool },
 ];
 const puppets = puppetSpecs.map((spec) => {
-  const puppet = new Puppet(spec.color);
+  const puppet = new Puppet(spec.theme);
   puppet.root.visible = false;
   scene.add(puppet.root);
   return { ...spec, puppet, ragdoll: new Ragdoll(puppet), wasVisible: false };
@@ -419,7 +419,10 @@ async function frame() {
   for (let i = 0; i < puppets.length; i++) updatePuppet(i);
   brain.notifyPuppetVisible(puppets[0]!.puppet.root.visible, puppets[1]!.puppet.root.visible);
   for (const spec of puppets) {
-    if (spec.puppet.root.visible) spec.ragdoll.update(dt);
+    if (spec.puppet.root.visible) {
+      spec.ragdoll.update(dt);
+      spec.puppet.update(dt);
+    }
   }
   updateStagePuppet(dt);
   drawLandmarks(handData);

@@ -5,6 +5,7 @@
 
 import * as THREE from "three";
 import { StagePuppet } from "./puppet-stage";
+import { Puppet, PUPPET_THEMES } from "./puppet";
 import type { Emotion, Gaze, Gesture } from "../server/protocol.ts";
 
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -32,6 +33,19 @@ scene.add(grid);
 
 const puppet = new StagePuppet();
 scene.add(puppet.root);
+
+// User puppets flank the AI puppet for visual QA. They cycle through a
+// gentle mouth-open animation so the jaw mechanic is visible without
+// hand tracking.
+const userWarm = new Puppet(PUPPET_THEMES.warm);
+userWarm.root.position.set(-3.4, 0, 0);
+userWarm.root.scale.setScalar(0.9);
+scene.add(userWarm.root);
+
+const userCool = new Puppet(PUPPET_THEMES.cool);
+userCool.root.position.set(3.4, 0, 0);
+userCool.root.scale.setScalar(0.9);
+scene.add(userCool.root);
 
 function resize() {
   const w = window.innerWidth;
@@ -134,12 +148,24 @@ refreshStatus();
 
 // --- Render loop ---
 let lastT = performance.now();
+let userT = 0;
 function frame() {
   const now = performance.now();
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   const bias = GAZE_TO_BIAS[currentGaze];
   puppet.update(dt, bias.x, bias.y);
+
+  // User puppets: gentle gaze sway + periodic mouth-open so the jaw mechanic is visible.
+  userT += dt;
+  const open = Math.max(0, Math.sin(userT * 1.6)) * 0.7;
+  userWarm.setOpen(open);
+  userCool.setOpen(Math.max(0, Math.sin(userT * 1.6 + Math.PI * 0.7)) * 0.7);
+  userWarm.setGaze(Math.sin(userT * 0.4) * 0.5, Math.sin(userT * 0.3) * 0.3);
+  userCool.setGaze(-Math.sin(userT * 0.4) * 0.5, Math.sin(userT * 0.3) * 0.3);
+  userWarm.update(dt);
+  userCool.update(dt);
+
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
