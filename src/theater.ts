@@ -11,19 +11,35 @@ const WOOD = 0x5a2a18;
 const WOOD_DARK = 0x2e1408;
 const BACKDROP = 0x120505;
 
-// Named regions where Claude can place scene props. Coordinates are
-// in world space (the theater root sits at the origin). Sized so sky
-// items read as far away and ground items as up-close, while still
-// fitting inside the proscenium frame.
-const ANCHOR_POSITIONS: Record<string, [number, number, number]> = {
-  sky_left: [-3, 2.0, -3],
-  sky_center: [0, 2.5, -3],
-  sky_right: [3, 2.0, -3],
-  ground_left: [-2.8, -1.5, -1.5],
-  ground_center: [0, -1.7, -1.5],
-  ground_right: [2.8, -1.5, -1.5],
-  far_back: [0, 0, -3.5],
+// Named regions where Claude can place scene props. Each anchor is
+// expressed as a fractional position inside the proscenium opening
+// (xFrac and yFrac in [-1, 1] relative to the safe-zone center) plus
+// a depth z. Actual world positions are recomputed on every layout()
+// call so anchors track the viewport-relative proscenium opening
+// regardless of window size.
+//
+// Margins inside the safe zone account for the typical prop's own
+// extent (~0.6 units) so a prop placed at any anchor doesn't bleed
+// past the frame edge.
+type AnchorLayout = { xFrac: number; yFrac: number; z: number };
+const ANCHOR_LAYOUT: Record<string, AnchorLayout> = {
+  sky_left: { xFrac: -0.7, yFrac: 0.7, z: -3 },
+  sky_center: { xFrac: 0, yFrac: 0.85, z: -3 },
+  sky_right: { xFrac: 0.7, yFrac: 0.7, z: -3 },
+  ground_left: { xFrac: -0.75, yFrac: -0.85, z: -1.5 },
+  ground_center: { xFrac: 0, yFrac: -0.95, z: -1.5 },
+  ground_right: { xFrac: 0.75, yFrac: -0.85, z: -1.5 },
+  far_back: { xFrac: 0, yFrac: 0, z: -3.5 },
 };
+
+// Camera z must match the main scene camera (src/main.ts). Used to
+// project anchor positions from the proscenium plane (z=0) back to
+// each anchor's own depth so they appear at the intended on-screen
+// location through perspective.
+const CAMERA_Z = 8;
+// Half-extent of a typical scene prop. Safe-zone shrinks by this
+// margin so props stay clear of the frame edges at every anchor.
+const PROP_MARGIN = 0.6;
 
 export class Theater {
   readonly root = new THREE.Group();
@@ -65,9 +81,10 @@ export class Theater {
 
   constructor() {
     this.root.add(this.group);
-    for (const [name, [x, y, z]] of Object.entries(ANCHOR_POSITIONS)) {
+    // Anchor groups are created here; their positions are filled in
+    // on the first layout() call (and updated on every subsequent one).
+    for (const name of Object.keys(ANCHOR_LAYOUT)) {
       const g = new THREE.Group();
-      g.position.set(x, y, z);
       this.anchors[name] = g;
       this.root.add(g);
     }
@@ -77,6 +94,34 @@ export class Theater {
    *  pre-fab and generated scene props inside these. */
   anchor(name: string): THREE.Group | null {
     return this.anchors[name] ?? null;
+  }
+
+  /** Recompute anchor world positions from the current proscenium
+   *  opening. Each anchor's fractional layout is mapped to a position
+   *  inside the safe zone (opening minus PROP_MARGIN), then projected
+   *  back through perspective to the anchor's own depth so the prop
+   *  appears at the intended on-screen location. */
+  private layoutAnchors(ix: number, iyTop: number, iyBot: number): void {
+    // Safe zone in proscenium-plane (z=0) coordinates, shrunk by
+    // PROP_MARGIN so a prop centered on an anchor stays inside the
+    // visible opening even at the edges.
+    const safeXMax = Math.max(0, ix - PROP_MARGIN);
+    const safeYTop = iyTop - PROP_MARGIN;
+    const safeYBot = iyBot + PROP_MARGIN;
+    const safeYMid = (safeYTop + safeYBot) / 2;
+    const safeYHalf = Math.max(0, (safeYTop - safeYBot) / 2);
+
+    for (const [name, layout] of Object.entries(ANCHOR_LAYOUT)) {
+      // Position in proscenium-plane coordinates.
+      const proscX = layout.xFrac * safeXMax;
+      const proscY = safeYMid + layout.yFrac * safeYHalf;
+      // Project back to world space at the anchor's depth: a point at
+      // (proscX, proscY, 0) lies on the same camera ray as
+      // (proscX * factor, proscY * factor, layout.z) where
+      // factor = (cameraZ - layout.z) / cameraZ.
+      const factor = (CAMERA_Z - layout.z) / CAMERA_Z;
+      this.anchors[name]!.position.set(proscX * factor, proscY * factor, layout.z);
+    }
   }
 
   layout(w: number, h: number) {
@@ -95,21 +140,12 @@ export class Theater {
     const iyBot = -h / 2 + baseH;
     const innerW = ix * 2;
 
+    this.layoutAnchors(ix, iyTop, iyBot);
+
     // Backdrop far behind everything.
     const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, h * 1.5), this.mBackdrop);
     backdrop.position.z = -4;
     this.group.add(backdrop);
-
-    // Back wall inside the opening: dark brown so curtains read against it.
-    // Extended slightly past the opening so its edges are hidden behind the
-    // outer curtain edges (and the frame face at z=0.3 covers anything
-    // beyond the opening cutout).
-    const backWall = new THREE.Mesh(
-      new THREE.PlaneGeometry(innerW + Math.min(w, 4) * 0.12, iyTop - iyBot),
-      this.mWoodDark,
-    );
-    backWall.position.set(0, (iyTop + iyBot) / 2, -2);
-    this.group.add(backWall);
 
     // Curtains (behind frame but in front of back wall).
     this.buildValance(w, h, col, topH, iyTop, innerW);

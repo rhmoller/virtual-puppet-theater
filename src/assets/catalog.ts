@@ -245,12 +245,15 @@ const SCENE_PROPS: Record<string, AssetSpec> = {
         rotation: [0, 0, 0],
         scale: [0.85, 0.85, 0.85],
       },
+      // Corona ring (orange torus around the sphere). Sized to fit
+      // within the visible sky-anchor window — original 2.4 reached
+      // past the proscenium top.
       {
         shape: "torus",
         color: 0xff9326,
         position: [0, 0, -0.05],
         rotation: [0, 0, 0],
-        scale: [2.4, 2.4, 0.4],
+        scale: [1.5, 1.5, 0.4],
       },
     ],
   },
@@ -453,19 +456,29 @@ const SCENE_PROPS: Record<string, AssetSpec> = {
   // base sphere + a small contrasting torus belt.
   beach_ball: {
     parts: [
+      // Two-tone ball: top half red, bottom half cream, with a yellow
+      // equator band so the silhouette reads as a striped ball rather
+      // than a single sphere.
       {
-        shape: "sphere",
+        shape: "half_sphere",
         color: 0xc73a3a,
         position: [0, 0, 0],
         rotation: [0, 0, 0],
-        scale: [0.45, 0.45, 0.45],
+        scale: [0.9, 0.9, 0.9],
       },
       {
-        shape: "torus",
+        shape: "half_sphere",
         color: 0xfff2cf,
         position: [0, 0, 0],
-        rotation: [Math.PI / 2, 0, 0],
-        scale: [1.0, 1.0, 0.3],
+        rotation: [Math.PI, 0, 0],
+        scale: [0.9, 0.9, 0.9],
+      },
+      {
+        shape: "cylinder",
+        color: 0xffd23a,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [0.92, 0.08, 0.92],
       },
     ],
   },
