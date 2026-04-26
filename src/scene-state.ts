@@ -19,6 +19,8 @@ import type {
 import { getCosmetic, getSceneProp } from "./assets/catalog";
 
 type WornMap = Partial<Record<SlotName, string>>;
+type ThemeChannel = "skin" | "shirt" | "hair";
+type ThemeOverrides = Partial<Record<ThemeChannel, string>>;
 
 type PendingRequest =
   | {
@@ -41,6 +43,15 @@ export class SceneState {
   };
   // Per-anchor scene prop occupancy.
   private placed: Partial<Record<AnchorName, string>> = {};
+  // Theme color overrides per puppet. Tracks only channels the LLM
+  // has changed away from the puppet's stock palette — empty means
+  // "stock theme". Surfaced in describe() so the LLM can answer
+  // questions about the current appearance and avoid pointless
+  // re-recolors of already-set channels.
+  private themeOverrides: Record<PuppetId, ThemeOverrides> = {
+    user: {},
+    ai: {},
+  };
   // Generated AssetSpecs keyed by asset name. Live alongside the
   // catalog — `resolveAsset` checks here first.
   private generated = new Map<string, AssetSpec>();
@@ -67,6 +78,13 @@ export class SceneState {
     if (asset === null) delete this.placed[anchor];
     else this.placed[anchor] = asset;
     return prev;
+  }
+
+  /** Records a theme-color override. Pass null to clear back to the
+   *  puppet's stock value. */
+  recolor(puppet: PuppetId, channel: ThemeChannel, color: string | null): void {
+    if (color === null) delete this.themeOverrides[puppet][channel];
+    else this.themeOverrides[puppet][channel] = color;
   }
 
   /** Wipes every dressed cosmetic and placed prop. Generated-asset cache
@@ -119,6 +137,14 @@ export class SceneState {
         `placed{${placedEntries.map(([a, n]) => `${a}=${n}`).join(",")}}`,
       );
     }
+    const colorParts: string[] = [];
+    for (const p of ["user", "ai"] as const) {
+      const o = this.themeOverrides[p];
+      for (const [ch, c] of Object.entries(o)) {
+        colorParts.push(`${p}.${ch}=${c}`);
+      }
+    }
+    if (colorParts.length > 0) parts.push(`colors{${colorParts.join(",")}}`);
     return parts.length > 0 ? parts.join(" ") : "empty";
   }
 }
@@ -158,9 +184,12 @@ export function applyStateEffect(state: SceneState, effect: Effect): void {
     case "clear":
       state.clearAll();
       return;
-    case "recolor":
-      // Visual-only: theme color isn't part of the scene-snapshot the LLM
-      // sees, so nothing to track here. Renderer applies it directly.
+    case "recolor": {
+      if (!effect.puppet || !effect.color) return;
+      const ch = effect.slot as unknown as string | null | undefined;
+      if (ch !== "skin" && ch !== "shirt" && ch !== "hair") return;
+      state.recolor(effect.puppet, ch, effect.color);
       return;
+    }
   }
 }
