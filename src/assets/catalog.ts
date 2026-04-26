@@ -128,27 +128,31 @@ const COSMETICS: Record<string, AssetSpec> = {
   // of the eyes. Mounts at the `eyes` slot.
   sunglasses: {
     parts: [
+      // Lenses: each centered on its corresponding eye (eyes sit at
+      // upperJaw-local x = ±0.4, slot-local x = ±0.4). z = 0.25 keeps
+      // the pupils behind the lens face.
       {
         shape: "cylinder",
         color: 0x111111,
-        position: [-0.32, 0, 0.05],
+        position: [-0.4, 0, 0.15],
         rotation: [Math.PI / 2, 0, 0],
-        scale: [0.32, 0.05, 0.32],
+        scale: [0.75, 0.05, 0.75],
       },
       {
         shape: "cylinder",
         color: 0x111111,
-        position: [0.32, 0, 0.05],
+        position: [0.4, 0, 0.15],
         rotation: [Math.PI / 2, 0, 0],
-        scale: [0.32, 0.05, 0.32],
+        scale: [0.75, 0.05, 0.75],
       },
-      // Bridge — small box between the lenses.
+      // Bridge — short bar across the merged front of the lenses, since
+      // the lenses now overlap heavily at center.
       {
         shape: "box",
         color: 0x111111,
-        position: [0, 0, 0.05],
+        position: [0, 0, 0.20],
         rotation: [0, 0, 0],
-        scale: [0.18, 0.06, 0.06],
+        scale: [0.5, 0.05, 0.05],
       },
     ],
   },
@@ -156,26 +160,32 @@ const COSMETICS: Record<string, AssetSpec> = {
   // Round wire-frame glasses — two thin tori in front of the eyes.
   round_glasses: {
     parts: [
+      // Lenses: aligned with sunglasses — same positions, depth, and
+      // overall outer radius. Torus default lies in the XY plane with
+      // its ring axis along Z (facing the viewer); no rotation needed.
+      // Scale_xy = 1.875 makes the outer ring radius 0.4 * 1.875 = 0.75
+      // (matching the sunglasses cylinder radius). Scale_z = 0.4 keeps
+      // the tube depth shallow.
       {
-        shape: "torus",
+        shape: "torus_thin",
         color: 0x2a2a2a,
-        position: [-0.32, 0, 0.08],
-        rotation: [Math.PI / 2, 0, 0],
-        scale: [0.7, 0.7, 0.4],
+        position: [-0.4, 0, 0.15],
+        rotation: [0, 0, 0],
+        scale: [0.7, 0.7, 1.0],
       },
       {
-        shape: "torus",
+        shape: "torus_thin",
         color: 0x2a2a2a,
-        position: [0.32, 0, 0.08],
-        rotation: [Math.PI / 2, 0, 0],
-        scale: [0.7, 0.7, 0.4],
+        position: [0.4, 0, 0.15],
+        rotation: [0, 0, 0],
+        scale: [0.7, 0.7, 1.0],
       },
       {
         shape: "box",
         color: 0x2a2a2a,
-        position: [0, 0, 0.08],
+        position: [0, 0, 0.20],
         rotation: [0, 0, 0],
-        scale: [0.2, 0.04, 0.04],
+        scale: [0.2, 0.05, 0.05],
       },
     ],
   },
