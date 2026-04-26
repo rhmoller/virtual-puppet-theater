@@ -28,6 +28,13 @@ export class Brain {
   private puppetStateDirty = false;
   private clientReady = false;
   private stopped = false;
+  // When paused, outbound user-driven events (transcript, user_speaking,
+  // signal, puppet_state) are suppressed and incoming `action` /
+  // `cancel_speech` events are dropped at the switch. The WS stays open
+  // so re-entry is instant. Side effect: server idle escalations still
+  // fire and their responses are silently discarded — acceptable cost
+  // for a demo-prep toggle.
+  private paused = false;
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Voice list may arrive before the WS is open — hold and flush on open.
@@ -44,7 +51,7 @@ export class Brain {
     this.startSTT();
     // Flush puppet-state changes at most 4×/sec.
     this.flushInterval = setInterval(() => {
-      if (this.puppetStateDirty) {
+      if (this.puppetStateDirty && !this.paused) {
         this.send({ type: "puppet_state", ...this.puppetState });
         this.puppetStateDirty = false;
       }
@@ -81,6 +88,37 @@ export class Brain {
     if (this.ws?.readyState === WebSocket.OPEN) this.send({ type: "hello" });
   }
 
+  /** Pause the user-driven loop: stop STT, drop outbound user events,
+   *  drop inbound action / cancel_speech, and silence any ongoing TTS
+   *  so the transition into debug-camera mode is clean. WS stays
+   *  connected for instant resume. */
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    if (this.stt) {
+      try {
+        this.stt.stop();
+      } catch {
+        /* not started */
+      }
+    }
+    this.handlers.onCancelSpeech();
+    this.handlers.onAiThinking?.(false);
+  }
+
+  /** Resume after pause: restart STT and re-allow event flow. */
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.stt) {
+      try {
+        this.stt.start();
+      } catch {
+        /* already started — onend backoff will restart */
+      }
+    }
+  }
+
   notifyPuppetVisible(visible: boolean) {
     if (visible === this.puppetState.visible) return;
     this.puppetState = { visible };
@@ -98,6 +136,7 @@ export class Brain {
    * Brain itself sends every call straight to the wire.
    */
   sendSignal(signal: Omit<Extract<ClientEvent, { type: "signal" }>, "type">) {
+    if (this.paused) return;
     this.send({ type: "signal", ...signal });
   }
 
@@ -126,6 +165,14 @@ export class Brain {
         return;
       }
       console.log("[ws ←]", formatServerEvent(msg));
+      // Drop user-loop events while paused — server may still fire idle
+      // escalations whose actions we silently discard. voice_pick and
+      // asset_ready remain useful (cosmetic prep, async jobs already in
+      // flight before the pause), so they aren't gated.
+      if (this.paused && (msg.type === "action" || msg.type === "cancel_speech")) {
+        if (msg.type === "action") this.handlers.onAiThinking?.(false);
+        return;
+      }
       switch (msg.type) {
         case "action":
           this.handlers.onAiThinking?.(false);

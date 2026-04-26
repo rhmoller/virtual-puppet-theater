@@ -45,7 +45,12 @@
         z-index: 3;
       }
 
-      body.debug #video {
+      /* Debug-mode visibility cycle, driven by body[data-debug]:
+         "camera"          — full-screen webcam, nothing else
+         "camera-markers"  — full-screen webcam + landmark overlay
+         "camera-puppet"   — full-screen webcam + puppets (no theater)
+         (no attribute)    — normal mode */
+      body[data-debug^="camera"] #video {
         top: 0;
         left: 0;
         width: 100vw;
@@ -55,7 +60,23 @@
         border-radius: 0;
         z-index: 0;
       }
-      body.debug #scene {
+      body[data-debug="camera-markers"] #landmark-canvas {
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+      }
+      body[data-debug="camera"] #landmark-canvas,
+      body[data-debug="camera-puppet"] #landmark-canvas {
+        display: none;
+      }
+      body[data-debug="camera"] #scene,
+      body[data-debug="camera-markers"] #scene {
+        display: none;
+      }
+      body[data-debug="camera-puppet"] #scene {
         background: transparent;
       }
 

@@ -49,15 +49,32 @@ scene.background = SCENE_BG;
 const theater = new Theater();
 scene.add(theater.root);
 
-let debug = false;
-function setDebug(on: boolean) {
-  debug = on;
-  document.body.classList.toggle("debug", debug);
-  scene.background = debug ? null : SCENE_BG;
-  theater.setVisible(!debug);
+// Debug-mode cycle, driven by the `D` key. Each press advances:
+//   normal → camera → camera-markers → camera-puppet → normal …
+// CSS rules in index.html key off body[data-debug] for visibility;
+// JS side only handles the two pieces CSS can't reach: the THREE
+// scene background (transparent vs. opaque) and the theater rig
+// visibility (hidden in any camera-* mode).
+const DEBUG_MODES = ["normal", "camera", "camera-markers", "camera-puppet"] as const;
+type DebugMode = (typeof DEBUG_MODES)[number];
+let debugIdx = 0;
+function setDebugMode(mode: DebugMode) {
+  if (mode === "normal") delete document.body.dataset.debug;
+  else document.body.dataset.debug = mode;
+  scene.background = mode === "normal" ? SCENE_BG : null;
+  theater.setVisible(mode === "normal");
+  // Demo-prep: don't run the user↔AI loop in any camera mode.
+  // STT stops, outbound user events are dropped, ongoing TTS is
+  // silenced. Idle-escalations still cost LLM calls server-side
+  // but their actions are dropped on the client — acceptable.
+  if (mode === "normal") brain?.resume();
+  else brain?.pause();
 }
 window.addEventListener("keydown", (e) => {
-  if (e.key === "d" || e.key === "D") setDebug(!debug);
+  if (e.key === "d" || e.key === "D") {
+    debugIdx = (debugIdx + 1) % DEBUG_MODES.length;
+    setDebugMode(DEBUG_MODES[debugIdx]!);
+  }
 });
 
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
