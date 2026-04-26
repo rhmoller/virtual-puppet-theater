@@ -22,9 +22,15 @@ import type {
 } from "../server/protocol.ts";
 import { renderSpec } from "./assets/render";
 import { SceneState, applyStateEffect } from "./scene-state";
+import { SLOT_NAMES, ANCHOR_NAMES } from "./assets/catalog";
 
 export type SlotResolver = (puppet: PuppetId, slot: SlotName) => THREE.Group | null;
 export type AnchorResolver = (anchor: AnchorName) => THREE.Group | null;
+export type Recolorer = (
+  puppet: PuppetId,
+  channel: "skin" | "shirt" | "hair",
+  color: string,
+) => void;
 
 const FADE_IN_DURATION = 0.35;
 const FADE_OUT_DURATION = 0.2;
@@ -46,6 +52,7 @@ export class SceneController {
     private state: SceneState,
     private slotFor: SlotResolver,
     private anchorFor: AnchorResolver,
+    private recolorPuppet: Recolorer,
   ) {}
 
   /** Apply the LLM's effects array. State updates mirror the renders.
@@ -67,6 +74,28 @@ export class SceneController {
           // Nothing to render yet — the puppet's stall line covers the wait.
           // The asset_ready event will arrive separately.
           break;
+        case "clear":
+          for (const puppet of ["user", "ai"] as const) {
+            for (const slot of SLOT_NAMES) {
+              const g = this.slotFor(puppet, slot);
+              if (g) this.fadeOutAll(g);
+            }
+          }
+          for (const anchor of ANCHOR_NAMES) {
+            const g = this.anchorFor(anchor);
+            if (g) this.fadeOutAll(g);
+          }
+          break;
+        case "recolor": {
+          // The wire schema reuses `slot` as the recolor channel — the
+          // typed enum (SlotName) doesn't include the recolor channel
+          // names, so widen via string cast and validate at runtime.
+          const channel = e.slot as unknown as string | null | undefined;
+          if (!e.puppet || !e.color) break;
+          if (channel !== "skin" && channel !== "shirt" && channel !== "hair") break;
+          this.recolorPuppet(e.puppet, channel, e.color);
+          break;
+        }
       }
     }
   }

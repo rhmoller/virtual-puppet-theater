@@ -136,7 +136,15 @@ export type AssetSpec = {
 //   "place"             → anchor, asset (asset null = clear anchor).
 //   "request_cosmetic"  → puppet, slot, description, request_id.
 //   "request_prop"      → anchor, description, request_id.
-export type EffectOp = "dress" | "place" | "request_cosmetic" | "request_prop";
+//   "clear"             → no fields. Wipes all cosmetics + scene props.
+//   "recolor"           → puppet, slot (= channel "skin"|"shirt"|"hair"), color.
+export type EffectOp =
+  | "dress"
+  | "place"
+  | "request_cosmetic"
+  | "request_prop"
+  | "clear"
+  | "recolor";
 export type Effect = {
   op: EffectOp;
   puppet?: PuppetId | null;
@@ -145,6 +153,7 @@ export type Effect = {
   asset?: string | null;
   description?: string | null;
   request_id?: string | null;
+  color?: string | null;
 };
 
 export type ClientEvent =
@@ -213,7 +222,7 @@ const EFFECT_ITEM_SCHEMA = {
   properties: {
     op: {
       type: "string",
-      enum: ["dress", "place", "request_cosmetic", "request_prop"],
+      enum: ["dress", "place", "request_cosmetic", "request_prop", "clear", "recolor"],
     },
     puppet: {
       type: ["string", "null"],
@@ -223,7 +232,7 @@ const EFFECT_ITEM_SCHEMA = {
     slot: {
       type: ["string", "null"],
       description:
-        'Required for op="dress" and op="request_cosmetic". One of: "head", "eyes", "neck", "hand_left", "hand_right". null otherwise.',
+        'Required for op="dress" and op="request_cosmetic" — one of: "head", "eyes", "neck", "hand_left", "hand_right". For op="recolor", repurposed as the channel — one of: "skin", "shirt", "hair". null otherwise.',
     },
     anchor: {
       type: ["string", "null"],
@@ -245,8 +254,13 @@ const EFFECT_ITEM_SCHEMA = {
       description:
         'Required for op="request_*" — short unique id (e.g. "r1") to match up the resulting asset. null otherwise.',
     },
+    color: {
+      type: ["string", "null"],
+      description:
+        'Required for op="recolor" — a CSS color name ("red", "skyblue") or hex string ("#ff8800"). null otherwise.',
+    },
   },
-  required: ["op", "puppet", "slot", "anchor", "asset", "description", "request_id"],
+  required: ["op", "puppet", "slot", "anchor", "asset", "description", "request_id", "color"],
 } as const;
 
 export const ACTION_JSON_SCHEMA = {

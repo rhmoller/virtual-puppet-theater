@@ -67,12 +67,23 @@ export class Puppet implements PuppetModel {
   // Cosmetic slot groups, lazily created.
   private slotGroups: Partial<Record<SlotName, THREE.Group>> = {};
 
+  // Theme-derived materials, retained so recolor() can mutate them in
+  // place. Each channel may have multiple materials (e.g. shirt: torso
+  // sleeves and a separate collar with different roughness/metalness),
+  // so we track them as arrays.
+  protected skinMats: THREE.MeshStandardMaterial[] = [];
+  protected shirtMats: THREE.MeshStandardMaterial[] = [];
+  protected hairMats: THREE.MeshStandardMaterial[] = [];
+
   constructor(theme: PuppetTheme) {
     const skin = new THREE.MeshStandardMaterial({ color: theme.skin, roughness: 0.85 });
     const shirt = new THREE.MeshStandardMaterial({ color: theme.shirt, roughness: 0.9 });
     const hair = new THREE.MeshStandardMaterial({ color: theme.hair, roughness: 0.8 });
     const dark = new THREE.MeshStandardMaterial({ color: BROW_DARK, roughness: 0.5 });
     const eyeWhite = new THREE.MeshStandardMaterial({ color: EYE_WHITE, roughness: 0.4 });
+    this.skinMats.push(skin);
+    this.shirtMats.push(shirt);
+    this.hairMats.push(hair);
 
     // Mouth interior — a dark sphere inside the head, revealed when the
     // jaw opens. The split half-sphere jaws cover it at rest.
@@ -166,9 +177,11 @@ export class Puppet implements PuppetModel {
     this.torso.add(torsoMesh);
 
     // Collar — torus ring at the neck line.
+    const collarMat = new THREE.MeshStandardMaterial({ color: theme.shirt, roughness: 0.7, metalness: 0.05 });
+    this.shirtMats.push(collarMat);
     const collar = new THREE.Mesh(
       new THREE.TorusGeometry(TORSO_R * 0.92, 0.07, 8, 24),
-      new THREE.MeshStandardMaterial({ color: theme.shirt, roughness: 0.7, metalness: 0.05 }),
+      collarMat,
     );
     collar.position.y = -0.05;
     collar.rotation.x = Math.PI / 2;
@@ -188,10 +201,14 @@ export class Puppet implements PuppetModel {
       upperArm.position.y = -(UPPER_LEN / 2 + UPPER_R);
       shoulder.add(upperArm);
 
-      // Cuff — dark band where the sleeve ends.
+      // Cuff — dark band where the sleeve ends. Tracked under hair channel
+      // so recoloring hair updates cuffs in lockstep, matching how the
+      // theme initially derives both from theme.hair.
+      const cuffMat = new THREE.MeshStandardMaterial({ color: theme.hair, roughness: 0.7 });
+      this.hairMats.push(cuffMat);
       const cuff = new THREE.Mesh(
         new THREE.CylinderGeometry(UPPER_R * 1.1, UPPER_R * 1.1, 0.06, 14),
-        new THREE.MeshStandardMaterial({ color: theme.hair, roughness: 0.7 }),
+        cuffMat,
       );
       cuff.position.y = -(UPPER_LEN + UPPER_R * 1.6);
       shoulder.add(cuff);
@@ -244,6 +261,18 @@ export class Puppet implements PuppetModel {
   setEmotion(_emotion: Emotion) {}
   playGesture(_gesture: Gesture) {}
   setSpeaking(_on: boolean) {}
+
+  recolor(channel: "skin" | "shirt" | "hair", color: string): void {
+    const mats =
+      channel === "skin"
+        ? this.skinMats
+        : channel === "shirt"
+          ? this.shirtMats
+          : this.hairMats;
+    // THREE.Color.set silently ignores unparseable strings, so this stays
+    // safe under arbitrary LLM output.
+    for (const m of mats) m.color.set(color);
+  }
 
   /** Returns a slot group on this hand-puppet for cosmetic mounting.
    *  Head/eyes attach to the *upper jaw* — the half that doesn't move

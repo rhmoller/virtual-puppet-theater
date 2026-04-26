@@ -43,9 +43,9 @@ SCENE ANCHORS (for "anchor" field): ${ANCHOR_NAMES.join(", ")}.
 # Effect schema
 
 Each effect is an object with all these keys (use null for keys not relevant to your op):
-{"op", "puppet", "slot", "anchor", "asset", "description", "request_id"}
+{"op", "puppet", "slot", "anchor", "asset", "description", "request_id", "color"}
 
-The four ops:
+The six ops:
 
 - "dress" — put a cosmetic on a puppet (or asset:null to remove).
   fields: puppet, slot, asset. Others null.
@@ -57,40 +57,63 @@ The four ops:
   ALSO say a short stall line in "say" ("Ooh, let me dream that up!") so the show doesn't go quiet — a designer agent is composing it in the background and it'll pop in a few seconds.
 - "request_prop" — same idea for novel scene props.
   fields: anchor, description, request_id. Others null.
+- "clear" — wipe EVERYTHING off the stage: every cosmetic on both puppets and every scene prop. Use this when the kid asks to "reset", "start over", "clear the stage", "remove everything", "wipe the scene", or anything else that means a fresh empty stage. All fields null.
+- "recolor" — change one of a puppet's three theme colors. Use when the kid says things like "make my puppet's shirt blue", "your hair should be pink", "give me green skin".
+  fields: puppet, slot (= channel: "skin", "shirt", or "hair"), color. Others null.
+  color is a CSS color name ("red", "skyblue", "lime") or a hex string ("#ff8800"). One channel per effect — emit multiple recolor effects in the same turn for full make-overs.
 
 # Worked examples (full flat shape — copy this style)
 
 Kid: "give the puppet a crown"
   effects: [
-    {"op":"dress","puppet":"ai","slot":"head","anchor":null,"asset":"crown","description":null,"request_id":null}
+    {"op":"dress","puppet":"ai","slot":"head","anchor":null,"asset":"crown","description":null,"request_id":null,"color":null}
   ]
   say: "A crown! For me?! Look at me, royal puppet!"
 
 Kid: "let's go to the beach"
   effects: [
-    {"op":"place","puppet":null,"slot":null,"anchor":"sky_center","asset":"sun","description":null,"request_id":null},
-    {"op":"place","puppet":null,"slot":null,"anchor":"ground_center","asset":"sand_castle","description":null,"request_id":null},
-    {"op":"place","puppet":null,"slot":null,"anchor":"ground_right","asset":"beach_ball","description":null,"request_id":null}
+    {"op":"place","puppet":null,"slot":null,"anchor":"sky_center","asset":"sun","description":null,"request_id":null,"color":null},
+    {"op":"place","puppet":null,"slot":null,"anchor":"ground_center","asset":"sand_castle","description":null,"request_id":null,"color":null},
+    {"op":"place","puppet":null,"slot":null,"anchor":"ground_right","asset":"beach_ball","description":null,"request_id":null,"color":null}
   ]
   say: "Beach time! Don't forget the sunscreen!"
 
 Kid: "I want sunglasses on my puppet"
   effects: [
-    {"op":"dress","puppet":"user","slot":"eyes","anchor":null,"asset":"sunglasses","description":null,"request_id":null}
+    {"op":"dress","puppet":"user","slot":"eyes","anchor":null,"asset":"sunglasses","description":null,"request_id":null,"color":null}
   ]
   say: "Cool. Looking sharp!"
 
 Kid: "I want a watermelon hat!"
   effects: [
-    {"op":"request_cosmetic","puppet":"ai","slot":"head","anchor":null,"asset":null,"description":"a watermelon hat","request_id":"r1"}
+    {"op":"request_cosmetic","puppet":"ai","slot":"head","anchor":null,"asset":null,"description":"a watermelon hat","request_id":"r1","color":null}
   ]
   say: "Ooh, a watermelon hat?! Let me dream that up!"
 
 Kid: "we need a giant rubber duck in the sky"
   effects: [
-    {"op":"request_prop","puppet":null,"slot":null,"anchor":"sky_center","asset":null,"description":"a giant yellow rubber duck","request_id":"r2"}
+    {"op":"request_prop","puppet":null,"slot":null,"anchor":"sky_center","asset":null,"description":"a giant yellow rubber duck","request_id":"r2","color":null}
   ]
   say: "A giant rubber duck! Quack! Hold on, let me sketch it!"
+
+Kid: "let's start over" / "reset everything" / "clear the stage"
+  effects: [
+    {"op":"clear","puppet":null,"slot":null,"anchor":null,"asset":null,"description":null,"request_id":null,"color":null}
+  ]
+  say: "Fresh stage! What should we make next?"
+
+Kid: "make my puppet's shirt blue"
+  effects: [
+    {"op":"recolor","puppet":"user","slot":"shirt","anchor":null,"asset":null,"description":null,"request_id":null,"color":"blue"}
+  ]
+  say: "Blue shirt incoming! Looking sharp!"
+
+Kid: "give yourself green skin and pink hair"
+  effects: [
+    {"op":"recolor","puppet":"ai","slot":"skin","anchor":null,"asset":null,"description":null,"request_id":null,"color":"limegreen"},
+    {"op":"recolor","puppet":"ai","slot":"hair","anchor":null,"asset":null,"description":null,"request_id":null,"color":"hotpink"}
+  ]
+  say: "Whoa, fresh look! How do I look?"
 
 # Rules
 
@@ -138,6 +161,10 @@ export class Session {
   // the follow-up (which includes the user's actual speech) is the only
   // thing the user hears.
   private userSpeakingDuringCall = false;
+  // Monotonic turn counter. Each LLM call gets a tag like "t1" used in
+  // brain/session log lines so overlapping calls can be correlated.
+  private nextTid = 1;
+  private currentTid: string | null = null;
   // True between the first partial transcript of a speaking burst and the
   // following final transcript. Used to send cancel_speech only once per
   // burst and to avoid spamming.
@@ -191,6 +218,9 @@ export class Session {
       case "hello":
         break;
       case "transcript":
+        // The client only sends transcripts with final=true (it does its
+        // own speculative promotion of stable partials). Partial events
+        // shouldn't appear here, but we ignore them defensively.
         if (event.final && event.text.trim().length > 0) {
           this.inSpeakingBurst = false;
           this.noteActivity();
@@ -286,6 +316,9 @@ export class Session {
     if (next && silence >= next.seconds) {
       this.idleLevel++;
       this.lastUserActivity = Date.now(); // reset so we don't re-fire immediately
+      console.log(
+        `[session] idle escalation level=${this.idleLevel} (silence=${silence.toFixed(0)}s)`,
+      );
       this.prompt({ role: "user", content: `[stage note: ${next.hint}]` }, "stage");
     }
     this.scheduleIdleCheck();
@@ -314,6 +347,9 @@ export class Session {
       // Multiple turns queued during one in-flight window still produce
       // exactly one follow-up LLM call.
       this.pendingTurns.push({ turn: augmented, origin });
+      console.log(
+        `[session${this.currentTid ? ` ${this.currentTid}` : ""}] queued during in-flight (origin=${origin}, pending=${this.pendingTurns.length})`,
+      );
       return;
     }
     this.history.push(augmented);
@@ -327,6 +363,8 @@ export class Session {
     this.inFlight = true;
     try {
       while (true) {
+        const tid = `t${this.nextTid++}`;
+        this.currentTid = tid;
         // Budget gate. Per-session sliding window + lifetime cap, then the
         // global daily ceiling. If any rejects we drop the triggering turn
         // (it's already been pushed onto history) and skip the LLM call.
@@ -341,7 +379,7 @@ export class Session {
           this.pendingTurns = [];
           break;
         }
-        const action = await this.llm.generateAction(this.history);
+        const action = await this.llm.generateAction(this.history, { tag: tid });
 
         const discardStageResponse =
           this.userSpeakingDuringCall && this.currentCallOrigin === "stage";
@@ -349,18 +387,19 @@ export class Session {
           // Roll back the triggering stage-note turn so the follow-up call
           // doesn't see a hanging unanswered prompt.
           this.history.length = callStartLen - 1;
+          console.log(
+            `[session ${tid}] discarded stage response (user spoke during call)`,
+          );
         } else {
           // Mirror the action's scene effects into the server-side scene
           // state BEFORE forwarding to the client so the next prompt's
           // [scene: ...] line reflects what we just told Claude to do.
           if (action.effects && action.effects.length > 0) {
             console.log(
-              "[session] effects:",
+              `[session ${tid}] effects:`,
               JSON.stringify(action.effects),
             );
             for (const eff of action.effects) applyStateEffect(this.sceneState, eff);
-          } else {
-            console.log("[session] no effects this turn");
           }
           const assistantText = renderAssistant(action);
           this.history.push({ role: "assistant", content: assistantText });
@@ -380,6 +419,9 @@ export class Session {
         this.userSpeakingDuringCall = false;
         for (const p of queued) this.history.push(p.turn);
         this.trimHistory();
+        console.log(
+          `[session ${tid}] draining ${queued.length} queued turn(s) → next call`,
+        );
       }
     } catch (err) {
       this.pendingTurns = [];
@@ -387,6 +429,7 @@ export class Session {
       this.send({ type: "error", message: String(err) });
     } finally {
       this.inFlight = false;
+      this.currentTid = null;
     }
   }
 
@@ -408,7 +451,10 @@ export class Session {
         void this.assetGenerator
           .generate({ description, mountKind: "cosmetic", slotOrAnchor: slot })
           .then((spec) => {
-            if (!spec) return;
+            if (!spec) {
+              console.log(`[session] asset-gen failed (req=${request_id}, "${description}")`);
+              return;
+            }
             const assetName = nameFromDescription(description);
             this.sceneState.dress(puppet, slot, assetName);
             this.send({ type: "asset_ready", request_id, asset_name: assetName, spec });
@@ -421,7 +467,10 @@ export class Session {
         void this.assetGenerator
           .generate({ description, mountKind: "prop", slotOrAnchor: anchor })
           .then((spec) => {
-            if (!spec) return;
+            if (!spec) {
+              console.log(`[session] asset-gen failed (req=${request_id}, "${description}")`);
+              return;
+            }
             const assetName = nameFromDescription(description);
             this.sceneState.place(anchor, assetName);
             this.send({ type: "asset_ready", request_id, asset_name: assetName, spec });

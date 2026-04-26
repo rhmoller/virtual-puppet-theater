@@ -28,6 +28,10 @@ export interface PuppetModel {
   playGesture(gesture: Gesture): void;
   /** Toggle the speaking lip-sync layer. No-op on user puppet. */
   setSpeaking(on: boolean): void;
+  /** Recolor one of the puppet's three theme channels. Color is anything
+   *  THREE.Color.set accepts (CSS color name or "#RRGGBB"). Unknown
+   *  channel or unparseable color is silently ignored. */
+  recolor(channel: "skin" | "shirt" | "hair", color: string): void;
   /** Per-frame tick. Gaze is supplied via setGaze, not as a tick arg. */
   update(dt: number): void;
 }

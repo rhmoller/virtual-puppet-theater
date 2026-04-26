@@ -198,6 +198,38 @@ export class Brain {
     let micDenied = false;
     let sttBackoff = 500;
 
+    // Speculative-final: Web Speech's `isFinal` is gated on a long
+    // end-of-utterance silence (~1.2–1.5s on Chrome). The partial text is
+    // usually stable well before that. We promote a partial to a "final"
+    // wire event once it's stopped growing for SPECULATIVE_PROMOTE_MS.
+    // Only one transcript is ever sent per speaking burst.
+    //
+    // Tuning: 800ms tolerates the mid-sentence pauses kids make ("I
+    // want… a banana hat!") while still beating Chrome's own final by
+    // 400–700ms. Lower values cut sentences off; higher values surrender
+    // most of the latency win.
+    const SPECULATIVE_PROMOTE_MS = 800;
+    let lastPartialText = "";
+    let partialPromoted = false;
+    let promoteTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPromoteTimer = () => {
+      if (promoteTimer !== null) {
+        clearTimeout(promoteTimer);
+        promoteTimer = null;
+      }
+    };
+    const resetBurst = () => {
+      clearPromoteTimer();
+      lastPartialText = "";
+      partialPromoted = false;
+    };
+    const promote = (text: string) => {
+      partialPromoted = true;
+      console.log(`[stt] promote partial → final: "${text}"`);
+      this.send({ type: "transcript", text, final: true });
+      this.handlers.onAiThinking?.(true);
+    };
+
     rec.onresult = (ev) => {
       // Successful results prove the recognizer is healthy — clear any
       // backoff accumulated by prior transient errors.
@@ -214,17 +246,44 @@ export class Brain {
           text,
           confidence,
         });
-        if (!text.trim()) continue;
-        this.send({ type: "transcript", text, final });
-        if (!final && text.trim().length > 0) {
-          this.send({ type: "user_speaking", speaking: true });
+        const trimmed = text.trim();
+        if (!trimmed) continue;
+
+        if (final) {
+          clearPromoteTimer();
+          if (!partialPromoted) {
+            this.send({ type: "transcript", text, final: true });
+            this.handlers.onAiThinking?.(true);
+          }
+          // The browser's final landed after our speculative promote;
+          // discard it to avoid a duplicate turn.
+          resetBurst();
+          continue;
         }
-        // A final transcript means the server is about to call Claude.
-        if (final) this.handlers.onAiThinking?.(true);
+
+        // Partial: drive barge-in via user_speaking, but don't send the
+        // partial transcript over the wire. Only the eventual promoted
+        // or browser-issued final goes out. Once we've promoted, suppress
+        // further user_speaking pings — the server's `inSpeakingBurst`
+        // flag was reset by the promoted-final and would otherwise
+        // (mis)treat each late partial as a fresh burst, firing
+        // duplicate cancel_speech events.
+        if (partialPromoted) continue;
+        this.send({ type: "user_speaking", speaking: true });
+
+        if (trimmed !== lastPartialText) {
+          lastPartialText = trimmed;
+          clearPromoteTimer();
+          promoteTimer = setTimeout(() => {
+            promoteTimer = null;
+            promote(trimmed);
+          }, SPECULATIVE_PROMOTE_MS);
+        }
       }
     };
     rec.onend = () => {
       console.log("[stt] end");
+      resetBurst();
       if (this.stopped || micDenied) return;
       // Auto-restart — continuous mode ends itself periodically. Use a
       // small backoff so a tight error/end loop doesn't spin the CPU.

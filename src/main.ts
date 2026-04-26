@@ -113,6 +113,10 @@ const sceneController = new SceneController(
     return userController.model.attach(slot);
   },
   (anchor: AnchorName) => theater.anchor(anchor),
+  (puppet, channel, color) => {
+    const model = puppet === "ai" ? stagePuppet : userController.model;
+    model.recolor(channel, color);
+  },
 );
 
 // theater.layout rebuilds ~100 merged bead geometries + curtains — too
@@ -174,17 +178,44 @@ hands.onResults((results: Results) => {
 });
 
 // Diff vs. last sent so we only emit a `signal` event on real change.
+const ENERGY_DEBOUNCE_S = 0.5;
 let lastSentPose: UserPose | null = null;
 let lastSentEnergy: UserEnergy | null = null;
+let pendingEnergy: UserEnergy | null = null;
+let pendingEnergyAccum = 0;
+let lastFlushTime = performance.now();
 function flushSignal() {
   const gestures: UserGesture[] = userController.drainGestures();
   const pose = userController.visible ? userController.pose : null;
   const energy = userController.visible ? userController.energy : null;
 
+  const nowFlush = performance.now();
+  const flushDt = Math.min(0.1, (nowFlush - lastFlushTime) / 1000);
+  lastFlushTime = nowFlush;
+
+  // Debounce energy: only send a transition once it's been stable.
+  let energyToSend: UserEnergy | undefined;
+  if (energy === lastSentEnergy) {
+    pendingEnergy = null;
+    pendingEnergyAccum = 0;
+  } else if (energy !== null) {
+    if (energy === pendingEnergy) {
+      pendingEnergyAccum += flushDt;
+      if (pendingEnergyAccum >= ENERGY_DEBOUNCE_S) {
+        energyToSend = energy;
+        pendingEnergy = null;
+        pendingEnergyAccum = 0;
+      }
+    } else {
+      pendingEnergy = energy;
+      pendingEnergyAccum = 0;
+    }
+  }
+
   const delta: { gestures?: UserGesture[]; pose?: UserPose; energy?: UserEnergy } = {};
   if (gestures.length > 0) delta.gestures = gestures;
   if (pose !== null && pose !== lastSentPose) delta.pose = pose;
-  if (energy !== null && energy !== lastSentEnergy) delta.energy = energy;
+  if (energyToSend !== undefined) delta.energy = energyToSend;
 
   if (
     delta.gestures === undefined &&

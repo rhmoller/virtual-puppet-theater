@@ -8,7 +8,7 @@ export type ChatMessage =
 
 export interface LLMBackend {
   name: string;
-  generateAction(messages: ChatMessage[]): Promise<Action>;
+  generateAction(messages: ChatMessage[], opts?: { tag?: string }): Promise<Action>;
   pickVoice(voices: VoiceInfo[]): Promise<string | null>;
 }
 
@@ -33,6 +33,11 @@ const VOICE_PICK_SCHEMA = {
   },
 } as const;
 
+function truncate(s: string, n: number): string {
+  const oneLine = s.replace(/\s+/g, " ").trim();
+  return oneLine.length <= n ? oneLine : oneLine.slice(0, n - 1) + "…";
+}
+
 export class AnthropicBackend implements LLMBackend {
   readonly name: string;
   private client = new Anthropic();
@@ -45,7 +50,7 @@ export class AnthropicBackend implements LLMBackend {
     this.supportsEffort = !/haiku/i.test(model);
   }
 
-  async generateAction(messages: ChatMessage[]): Promise<Action> {
+  async generateAction(messages: ChatMessage[], opts?: { tag?: string }): Promise<Action> {
     const systemParts: string[] = [];
     const turns: Anthropic.MessageParam[] = [];
     for (const m of messages) {
@@ -53,15 +58,32 @@ export class AnthropicBackend implements LLMBackend {
       else turns.push({ role: m.role, content: m.content });
     }
 
+    const lastTurn = turns[turns.length - 1];
+    const lastPreview =
+      typeof lastTurn?.content === "string"
+        ? truncate(lastTurn.content, 200)
+        : "(non-text)";
+    const tag = opts?.tag ? ` ${opts.tag}` : "";
+    console.log(
+      `[brain${tag} →] ${this.model} turns=${turns.length} last(${lastTurn?.role})="${lastPreview}"`,
+    );
+    const t0 = performance.now();
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 600,
-      // System prompt + conversation prefix are stable across turns, so
-      // enabling prompt caching lets subsequent calls reuse the cached
-      // prefix (cheaper reads, lower TTFT) once the prefix is long
-      // enough — Opus 4.7 requires ≥ 4096 cacheable tokens to kick in.
-      cache_control: { type: "ephemeral" },
-      system: systemParts.join("\n\n"),
+      // System prompt is stable across turns. Marking it as a cache
+      // breakpoint lets subsequent calls reuse the cached prefix
+      // (cheaper reads, lower TTFT) once the prefix is long enough —
+      // Opus 4.7 requires ≥ 4096 cacheable tokens, Haiku 4.5 ≥ 1024.
+      // The Anthropic API expects `cache_control` on a content block,
+      // not as a top-level argument.
+      system: [
+        {
+          type: "text",
+          text: systemParts.join("\n\n"),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: turns,
       output_config: {
         // low effort: short, structured reply, no heavy reasoning needed.
@@ -71,11 +93,23 @@ export class AnthropicBackend implements LLMBackend {
       },
     });
 
+    const dt = Math.round(performance.now() - t0);
+    const usage = response.usage;
+    const cacheHit = usage?.cache_read_input_tokens ?? 0;
+    const cacheWrite = usage?.cache_creation_input_tokens ?? 0;
+    console.log(
+      `[brain${tag} ←] ${dt}ms in=${usage?.input_tokens ?? "?"} out=${usage?.output_tokens ?? "?"} cache(r/w)=${cacheHit}/${cacheWrite}`,
+    );
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new Error(`Anthropic returned no text block: ${JSON.stringify(response.content)}`);
     }
     const obj = JSON.parse(textBlock.text);
+    const fxCount = Array.isArray(obj.effects) ? obj.effects.length : 0;
+    const sayPreview = typeof obj.say === "string" ? truncate(obj.say, 120) : "";
+    console.log(
+      `[brain${tag}] reply: say="${sayPreview}" emotion=${obj.emotion ?? "?"} gaze=${obj.gaze ?? "?"} gesture=${obj.gesture ?? "?"} fx=${fxCount}`,
+    );
     return {
       say: typeof obj.say === "string" ? obj.say : undefined,
       emotion: obj.emotion,
@@ -108,6 +142,8 @@ If no voice fits, return an empty string.
 Voices:
 ${table}`;
 
+    console.log(`[voice-pick] → ${this.model} voices=${list.length}`);
+    const t0 = performance.now();
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 200,
@@ -119,6 +155,8 @@ ${table}`;
       },
     });
 
+    const dt = Math.round(performance.now() - t0);
+    console.log(`[voice-pick] ← ${dt}ms`);
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") return null;
     try {

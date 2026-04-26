@@ -10,6 +10,21 @@ import {
   originAllowed,
 } from "./limits.ts";
 
+// Prefix every log line with HH:MM:SS.mmm so cross-event timing is
+// readable at a glance. Wrap once at startup; covers all modules that
+// log via console.{log,warn,error} (they execute later, by request time).
+{
+  const stamp = () => {
+    const d = new Date();
+    const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+    return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}]`;
+  };
+  for (const k of ["log", "warn", "error"] as const) {
+    const orig = console[k].bind(console);
+    console[k] = (...args: unknown[]) => orig(stamp(), ...args);
+  }
+}
+
 const PORT = Number(process.env.PORT ?? 3001);
 // Map brain size choice → Claude model. Defaults to large/Opus when the
 // query param is missing or unrecognized.

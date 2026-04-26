@@ -238,6 +238,9 @@ export class StagePuppet extends Puppet {
       color: PUPPET_THEMES.stage.skin,
       roughness: 0.85,
     });
+    // Register the ear material under the skin channel so recolor() keeps
+    // the ears in sync with the rest of the face.
+    this.skinMats.push(skinMat);
     const earGeom = new THREE.SphereGeometry(0.18, 14, 12);
     const leftEar = new THREE.Mesh(earGeom, skinMat);
     leftEar.position.set(-1.0, 0.1, 0);

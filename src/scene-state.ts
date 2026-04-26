@@ -69,6 +69,15 @@ export class SceneState {
     return prev;
   }
 
+  /** Wipes every dressed cosmetic and placed prop. Generated-asset cache
+   *  and pending design requests are preserved — re-asks should still hit
+   *  the asset-gen cache, and in-flight designs still have somewhere to
+   *  land if the user hasn't asked to wipe their request specifically. */
+  clearAll(): void {
+    this.worn = { user: {}, ai: {} };
+    this.placed = {};
+  }
+
   recordPending(request_id: string, req: PendingRequest): void {
     this.pending.set(request_id, req);
   }
@@ -145,6 +154,13 @@ export function applyStateEffect(state: SceneState, effect: Effect): void {
         anchor: effect.anchor,
         description: effect.description,
       });
+      return;
+    case "clear":
+      state.clearAll();
+      return;
+    case "recolor":
+      // Visual-only: theme color isn't part of the scene-snapshot the LLM
+      // sees, so nothing to track here. Renderer applies it directly.
       return;
   }
 }

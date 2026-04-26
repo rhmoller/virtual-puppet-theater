@@ -168,9 +168,16 @@ export class AssetGenerator {
       const response = await this.client.messages.create({
         model: ASSET_MODEL,
         max_tokens: 800,
-        // Long stable prefix → cache hits across requests.
-        cache_control: { type: "ephemeral" },
-        system: SYSTEM_PROMPT,
+        // Long stable prefix → cache hits across requests. Cache marker
+        // must live on a content block within `system`, not as a
+        // top-level call arg.
+        system: [
+          {
+            type: "text",
+            text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
         messages: [{ role: "user", content: userPrompt }],
         output_config: {
           // Opus accepts effort: low — we want a tight, fast response.
