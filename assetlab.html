@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asset lab</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111;
+        color: #ccc;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #scene {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+      }
+      #panel {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 2;
+        padding: 14px 16px;
+        background: rgba(20, 20, 20, 0.92);
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        width: 320px;
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+      }
+      #panel h2 {
+        margin: 0 0 6px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+        color: #7a7a7a;
+      }
+      #panel section {
+        margin-bottom: 14px;
+      }
+      #panel section:last-of-type {
+        margin-bottom: 0;
+      }
+      #panel input[type="text"],
+      #panel select {
+        width: 100%;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 8px;
+        background: #1a1a1a;
+        color: #ccc;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      #panel input[type="text"]:focus,
+      #panel select:focus {
+        outline: none;
+        border-color: #d67553;
+      }
+      #panel button {
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 12px;
+        margin: 2px 4px 2px 0;
+        background: #1d1d1d;
+        color: #ccc;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #panel button:hover {
+        background: #2a2a2a;
+        border-color: #555;
+      }
+      #panel button.primary {
+        background: #d67553;
+        color: #111;
+        border-color: #d67553;
+      }
+      #panel button.primary:hover {
+        background: #e08a6e;
+      }
+      #panel button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .row > * {
+        flex: 1;
+      }
+      #status {
+        margin-top: 6px;
+        font-size: 11px;
+        color: #7a7a7a;
+        min-height: 14px;
+      }
+      #status.err {
+        color: #e07a7a;
+      }
+      #spec {
+        margin-top: 8px;
+        padding: 8px;
+        background: #0c0c0c;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 10px;
+        line-height: 1.5;
+        color: #9da9b3;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .hint {
+        margin-top: 4px;
+        font-size: 10px;
+        color: #666;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="panel">
+      <section>
+        <h2>Mount</h2>
+        <div class="row">
+          <select id="puppet-kind">
+            <option value="stage">Stage puppet</option>
+            <option value="user">User puppet</option>
+          </select>
+          <select id="slot">
+            <option value="head">head</option>
+            <option value="eyes">eyes</option>
+            <option value="neck">neck</option>
+            <option value="hand_left">hand_left</option>
+            <option value="hand_right">hand_right</option>
+          </select>
+        </div>
+      </section>
+
+      <section>
+        <h2>Generate</h2>
+        <input id="description" type="text" placeholder="e.g. wooden sword, banana hat" />
+        <div class="hint">Enter a free-form description, then Generate.</div>
+        <div style="margin-top: 6px">
+          <button id="gen" class="primary">Generate</button>
+          <button id="clear">Clear slot</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Catalog</h2>
+        <select id="catalog">
+          <option value="">— pick a catalog item —</option>
+        </select>
+        <div class="hint">Mount a hand-authored catalog asset for comparison.</div>
+      </section>
+
+      <div id="status"></div>
+      <pre id="spec" hidden></pre>
+    </div>
+    <script type="module" src="/src/assetlab.ts"></script>
+  </body>
+</html>

@@ -10,6 +10,9 @@ export default defineConfig({
       "/tts": {
         target: "http://localhost:3001",
       },
+      "/assetgen": {
+        target: "http://localhost:3001",
+      },
     },
   },
 });

@@ -58,6 +58,40 @@ const server = Bun.serve<SocketData, string>({
       return new Response("ok");
     }
 
+    if (url.pathname === "/assetgen" && req.method === "POST") {
+      if (!originAllowed(req.headers)) {
+        return new Response("forbidden", { status: 403 });
+      }
+      let body: { description?: unknown; mountKind?: unknown; slotOrAnchor?: unknown };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return new Response("invalid json", { status: 400 });
+      }
+      const description = typeof body.description === "string" ? body.description.trim() : "";
+      const mountKind = body.mountKind === "cosmetic" || body.mountKind === "prop" ? body.mountKind : null;
+      const slotOrAnchor = typeof body.slotOrAnchor === "string" ? body.slotOrAnchor : "";
+      if (!description || !mountKind || !slotOrAnchor) {
+        return new Response("missing description, mountKind, or slotOrAnchor", { status: 400 });
+      }
+      try {
+        const spec = await assetGenerator.generate({
+          description: description.slice(0, 200),
+          mountKind,
+          slotOrAnchor,
+        });
+        if (!spec) {
+          return new Response("generation failed", { status: 502 });
+        }
+        return new Response(JSON.stringify({ spec }), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      } catch (err) {
+        console.warn("[assetgen] error:", err);
+        return new Response("assetgen failed", { status: 502 });
+      }
+    }
+
     if (url.pathname === "/tts" && req.method === "POST") {
       if (!originAllowed(req.headers)) {
         return new Response("forbidden", { status: 403 });
