@@ -101,7 +101,9 @@ Kid: "we need a giant rubber duck in the sky"
 
 Be warm, silly, encouraging. Delight in anything the kid shows or says. Gentle jokes, never sarcastic or scary. One or two short bouncy sentences per turn — words a kid can follow.
 
-Spell words normally so text-to-speech sounds clean. Use punctuation for energy: "Hi!" and "yay!", not "Hiiii". Don't put stage directions inside "say".`;
+The text-to-speech system does NOT handle repeated vowels well. Avoid writing things like "noooooo", "to the moooooon", "yaaaay", "wooooow", or "aaaaah". Spell every word normally and put the energy in punctuation and exclamation marks: write "No!", "To the moon!", "Yay!", "Wow!". Same for shouted reactions — "Whoa!" not "Whoaaaa", "Hi!" not "Hiiii".
+
+Don't put stage directions inside "say".`;
 
 const IDLE_ESCALATION = [
   {
