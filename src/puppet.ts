@@ -8,11 +8,14 @@ export type PuppetTheme = {
   hair: number;
 };
 
-// Two stock themes used by main.ts. Kept inline so the user puppet has
-// a clear visual identity without a separate roster module.
+// Stock themes. `warm` is the user puppet's default; `stage` is for the
+// AI-driven StagePuppet (extending Puppet) — the lavender/mustard/teal
+// palette gives the AI character a distinct visual identity from any
+// user puppet.
 export const PUPPET_THEMES = {
   warm: { skin: 0xf2c0a8, shirt: 0xd98b4f, hair: 0x4a3a2e },
   cool: { skin: 0xc9d6c3, shirt: 0x7fb3a0, hair: 0x2a3a4a },
+  stage: { skin: 0xc9b7e8, shirt: 0xe0a244, hair: 0x128a8a },
 } as const satisfies Record<string, PuppetTheme>;
 
 // Joint dimensions. Must stay in sync with src/ragdoll.ts.
@@ -44,18 +47,22 @@ export class Puppet implements PuppetModel {
   readonly leftElbow = new THREE.Group();
   readonly rightElbow = new THREE.Group();
 
-  private headGroup = new THREE.Group();
-  private upperJaw = new THREE.Group();
-  private lowerJaw = new THREE.Group();
-  private leftEye = new THREE.Group();
-  private rightEye = new THREE.Group();
+  // Protected so the AI-driven StagePuppet subclass can target them
+  // for emotion/gesture/speaking animations without re-building the rig.
+  protected headGroup = new THREE.Group();
+  protected upperJaw = new THREE.Group();
+  protected lowerJaw = new THREE.Group();
+  protected leftEye = new THREE.Group();
+  protected rightEye = new THREE.Group();
 
-  private leftEyeMesh: THREE.Mesh;
-  private rightEyeMesh: THREE.Mesh;
-  private leftPupil: THREE.Mesh;
-  private rightPupil: THREE.Mesh;
-  private blinkT = -1;
-  private nextBlink = 1.5 + Math.random() * 3;
+  protected leftEyeMesh!: THREE.Mesh;
+  protected rightEyeMesh!: THREE.Mesh;
+  protected leftPupil!: THREE.Mesh;
+  protected rightPupil!: THREE.Mesh;
+  protected leftBrow!: THREE.Mesh;
+  protected rightBrow!: THREE.Mesh;
+  protected blinkT = -1;
+  protected nextBlink = 1.5 + Math.random() * 3;
 
   // Cosmetic slot groups, lazily created.
   private slotGroups: Partial<Record<SlotName, THREE.Group>> = {};
@@ -113,7 +120,7 @@ export class Puppet implements PuppetModel {
       brow.position.set(side * 0.42, 0.74, 0.84);
       brow.rotation.z = side * -0.18;
       this.upperJaw.add(brow);
-      return { eyeMesh, pupil };
+      return { eyeMesh, pupil, brow };
     };
     const left = makeEye(-1, this.leftEye);
     const right = makeEye(1, this.rightEye);
@@ -121,6 +128,8 @@ export class Puppet implements PuppetModel {
     this.rightEyeMesh = right.eyeMesh;
     this.leftPupil = left.pupil;
     this.rightPupil = right.pupil;
+    this.leftBrow = left.brow;
+    this.rightBrow = right.brow;
 
     // Nose — a small skin-colored sphere just above the mouth line.
     const nose = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), skin);
@@ -240,19 +249,33 @@ export class Puppet implements PuppetModel {
    *  Head/eyes attach to the *upper jaw* — the half that doesn't move
    *  when the mouth opens — so a hat doesn't bob with every "speech".
    *  Hand slots attach inside the elbow groups so they ragdoll with
-   *  the lower arm. */
+   *  the lower arm.
+   *
+   *  Slot-local conventions match the StagePuppet's so the catalog
+   *  works on either rig:
+   *    head:   y=0 is head-center (upperJaw origin); skull radius is
+   *            ~1.0, so catalog hats author their brim around y≈0.95
+   *            and land on top of the head.
+   *    eyes:   y=0 is the eye line; +Z points outward from the face.
+   *    neck:   y=0 is the neckline (just below the head).
+   *    hands:  +Y points down along the forearm (palm side); +Z points
+   *            outward from the body. Catalog wand authors the shaft
+   *            along +Z so it reads as "held forward" at rest.
+   */
   attach(slot: SlotName): THREE.Group {
     const cached = this.slotGroups[slot];
     if (cached) return cached;
     const g = new THREE.Group();
     switch (slot) {
       case "head":
-        // Top of the skull, in upperJaw-local space.
-        g.position.set(0, 0.95, 0);
+        // Slot-local origin = head-center. Catalog hats place their
+        // brim around y≈0.95, which lands on top of the skull.
+        g.position.set(0, 0, 0);
         this.upperJaw.add(g);
         break;
       case "eyes":
-        // In front of the eye sockets.
+        // The user puppet's eyes sit at upperJaw-local y=0.45, z≈0.78.
+        // Slot lives at eye level, just in front of the pupils.
         g.position.set(0, 0.45, 0.95);
         this.upperJaw.add(g);
         break;

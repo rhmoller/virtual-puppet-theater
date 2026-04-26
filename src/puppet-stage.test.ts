@@ -2,20 +2,22 @@ import { test, expect } from "bun:test";
 import * as THREE from "three";
 import { StagePuppet } from "./puppet-stage.ts";
 
-test("construction builds a visible rig", () => {
+test("construction builds a visible rig with mesh children", () => {
   const p = new StagePuppet();
   expect(p.root).toBeInstanceOf(THREE.Group);
-  // root → rig → bodyGroup → (torso, yoke, neck, head, arms)
-  const rig = p.root.children[0] as THREE.Group;
-  const bodyGroup = rig.children[0] as THREE.Group;
-  // Expect torso + yoke + neck + head group + two arm groups = 6
-  expect(bodyGroup.children.length).toBeGreaterThanOrEqual(6);
+  // Sanity: traversal finds at least one Mesh somewhere under root.
+  let meshCount = 0;
+  p.root.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) meshCount++;
+  });
+  expect(meshCount).toBeGreaterThan(5);
 });
 
 test("setEmotion(surprised) drives wider eye scale after a few updates", () => {
   const p = new StagePuppet();
-  // prime neutral
-  p.update(0.5);
+  // Prime neutral so eased params settle.
+  for (let i = 0; i < 10; i++) p.update(0.05);
+  // Find an eye-white sphere — first match in a depth-first search.
   const findEye = (root: THREE.Object3D): THREE.Mesh | null => {
     if (root instanceof THREE.Mesh && root.geometry instanceof THREE.SphereGeometry) {
       const mat = root.material as THREE.MeshStandardMaterial;
@@ -31,62 +33,52 @@ test("setEmotion(surprised) drives wider eye scale after a few updates", () => {
   expect(eye).not.toBeNull();
   const neutralY = eye!.scale.y;
   p.setEmotion("surprised");
-  // Ease over several frames. Tau ~300ms, so 1.5s settles well.
-  for (let i = 0; i < 30; i++) p.update(0.05);
-  expect(eye!.scale.y).toBeGreaterThan(neutralY);
+  // Tau ~300ms; settle well past it. Track the peak eye scale across
+  // the period so an unlucky blink at the final tick can't fail the
+  // assertion.
+  let maxEyeY = 0;
+  for (let i = 0; i < 40; i++) {
+    p.update(0.05);
+    if (eye!.scale.y > maxEyeY) maxEyeY = eye!.scale.y;
+  }
+  expect(maxEyeY).toBeGreaterThan(neutralY * 1.2);
 });
 
-test("playGesture(wave) becomes inactive after the gesture duration", () => {
+test("playGesture(wave) ticks through its duration without errors", () => {
   const p = new StagePuppet();
   p.playGesture("wave");
-  // Wave duration is 1.2s. Tick past it and a little extra.
   for (let i = 0; i < 30; i++) p.update(0.05);
-  // Now play another gesture from a clean state and confirm timer starts fresh.
+  // Replay from clean state.
   p.playGesture("wave");
-  // After one update, gesture should still be active (not expired).
   p.update(0.1);
-  // Tick far past duration; the internal timer should reset back to "none".
   for (let i = 0; i < 40; i++) p.update(0.05);
-  // Replaying a gesture after expiry should be a no-op on failed case:
-  // if the old gesture had not cleared, the internal gestureT would keep
-  // accumulating, but we can verify indirectly by ensuring updates still
-  // run without error across many calls.
   expect(() => {
     for (let i = 0; i < 10; i++) p.update(0.05);
   }).not.toThrow();
 });
 
-test("setSpeaking(true) makes the mouth visible and open; setSpeaking(false) hides it again", () => {
+test("setSpeaking(true) opens the jaw; setSpeaking(false) closes it", () => {
   const p = new StagePuppet();
-  // Settle with speaking off — mouth should be hidden.
+  // Settle with speaking off — jaw should be at rest (rotation ~0).
   for (let i = 0; i < 10; i++) p.update(0.05);
-  const scan = (root: THREE.Object3D, out: THREE.Mesh[] = []): THREE.Mesh[] => {
-    if (root instanceof THREE.Mesh) out.push(root);
-    for (const c of root.children) scan(c, out);
-    return out;
-  };
-  const meshes = scan(p.root);
-  // Mouth is the only dark squashed sphere that starts hidden.
-  const hiddenDarkMeshes = meshes.filter(
-    (m) =>
-      !m.visible && (m.material as THREE.MeshStandardMaterial).color.getHex() === 0x1a1410,
-  );
-  expect(hiddenDarkMeshes.length).toBe(1);
-  const mouth = hiddenDarkMeshes[0]!;
+  // The lowerJaw is a protected field on Puppet; reach it via property
+  // access for the test (cast through unknown to bypass visibility).
+  const lowerJaw = (p as unknown as { lowerJaw: THREE.Group }).lowerJaw;
+  expect(lowerJaw).toBeDefined();
+  expect(Math.abs(lowerJaw.rotation.x)).toBeLessThan(0.1);
 
-  // Turn speaking on; run frames; mouth y-scale should rise above ~0 and
-  // become visible.
+  // Turn speaking on; envelope ramps up with a 4Hz pulse, so a peak
+  // open should appear within ~250ms.
   p.setSpeaking(true);
-  let maxScaleY = 0;
+  let maxOpen = 0;
   for (let i = 0; i < 60; i++) {
     p.update(0.033);
-    if (mouth.scale.y > maxScaleY) maxScaleY = mouth.scale.y;
+    if (lowerJaw.rotation.x > maxOpen) maxOpen = lowerJaw.rotation.x;
   }
-  expect(maxScaleY).toBeGreaterThan(0.05);
-  expect(mouth.visible).toBe(true);
+  expect(maxOpen).toBeGreaterThan(0.1);
 
-  // Turn speaking off; envelope decays and mouth becomes hidden again.
+  // Turn off; envelope decays. Give it time to settle back near 0.
   p.setSpeaking(false);
   for (let i = 0; i < 120; i++) p.update(0.033);
-  expect(mouth.visible).toBe(false);
+  expect(Math.abs(lowerJaw.rotation.x)).toBeLessThan(0.05);
 });

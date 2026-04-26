@@ -32,6 +32,7 @@ grid.position.y = -1.9;
 scene.add(grid);
 
 const puppet = new StagePuppet();
+puppet.root.scale.setScalar(0.9);
 scene.add(puppet.root);
 
 // User puppet sits beside the AI puppet for visual QA. It cycles

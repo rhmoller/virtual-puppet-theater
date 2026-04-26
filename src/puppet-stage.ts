@@ -1,15 +1,12 @@
 import * as THREE from "three";
-import type { Emotion, Gesture, SlotName } from "../server/protocol.ts";
-import type { PuppetModel } from "./puppet-model";
+import type { Emotion, Gesture } from "../server/protocol.ts";
+import { Puppet, PUPPET_THEMES } from "./puppet";
 
-// Palette. Deliberately non-naturalistic; see docs/specs/new-puppet.md for
-// the "not this" list of Muppet-adjacent colors.
-const SKIN = 0xc9b7e8; // pastel lavender
-const SHIRT = 0xe0a244; // warm mustard
-const HAIR = 0x128a8a; // deep teal
-const EYE_WHITE = 0xf5f1e8;
-const DARK = 0x1a1410; // near-black, shared by iris, brow, mouth
-const NOSE = 0xb89cd4; // slightly darker lavender than skin
+// Stage puppet: an AI-driven hand-puppet built on the same rig as the
+// user puppet. Inherits the sphere head + split-jaw mouth + ragdoll-able
+// arm hierarchy from Puppet, layers emotion/gesture/speaking animation
+// on top, and adds a small visual variation (visible ears) so the
+// character reads as distinct from the user puppet at a glance.
 
 type EmotionParams = {
   eyeScaleY: number;
@@ -20,12 +17,9 @@ type EmotionParams = {
   armAmp: number;
   blinkRate: number;
   blinkSuppress: number;
-  // Brow: inner-end height offset (positive = up), outer-end offset, and
-  // rotation of each brow about z (positive = outer-up/inner-down).
   browInner: number;
   browOuter: number;
   browAngle: number;
-  // Head tilt about z (positive = right tilt in view).
   headTiltZ: number;
 };
 
@@ -122,10 +116,10 @@ type GestureSpec = {
 };
 
 type GestureRig = {
-  leftArm: THREE.Group;
-  rightArm: THREE.Group;
-  bodyGroup: THREE.Group;
-  head: THREE.Group;
+  leftShoulder: THREE.Group;
+  rightShoulder: THREE.Group;
+  root: THREE.Group;
+  headGroup: THREE.Group;
 };
 
 function envelope(t: number, dur: number): number {
@@ -140,113 +134,84 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
   none: null,
   wave: {
     duration: 1.2,
-    apply(t, { rightArm }) {
+    apply(t, { rightShoulder }) {
       const env = envelope(t, 1.2);
-      // Lift the arm up and wave the wrist.
-      rightArm.rotation.z += -1.8 * env;
-      rightArm.rotation.x += Math.sin(t * Math.PI * 2 * 2.5) * 0.6 * env;
+      rightShoulder.rotation.z += -1.8 * env;
+      rightShoulder.rotation.x += Math.sin(t * Math.PI * 2 * 2.5) * 0.6 * env;
     },
   },
   shrug: {
     duration: 0.8,
-    apply(t, { leftArm, rightArm, bodyGroup }) {
+    apply(t, { leftShoulder, rightShoulder, root }) {
       const env = envelope(t, 0.8);
-      leftArm.position.y += 0.25 * env;
-      rightArm.position.y += 0.25 * env;
-      leftArm.rotation.z += -0.5 * env;
-      rightArm.rotation.z += 0.5 * env;
-      bodyGroup.position.y -= 0.05 * env;
+      leftShoulder.rotation.z += -0.5 * env;
+      rightShoulder.rotation.z += 0.5 * env;
+      root.position.y -= 0.05 * env;
     },
   },
   lean_in: {
     duration: 1.0,
-    apply(t, { bodyGroup }) {
+    apply(t, { root }) {
       const env = envelope(t, 1.0);
-      bodyGroup.position.z += 0.35 * env;
-      bodyGroup.scale.setScalar(1 + 0.05 * env);
+      root.position.z += 0.35 * env;
     },
   },
   nod: {
     duration: 0.8,
-    apply(t, { head }) {
+    apply(t, { headGroup }) {
       const env = envelope(t, 0.8);
-      head.rotation.x += Math.sin(t * Math.PI * 2 * 2.5) * 0.25 * env;
+      headGroup.rotation.x += Math.sin(t * Math.PI * 2 * 2.5) * 0.25 * env;
     },
   },
   shake: {
     duration: 0.7,
-    apply(t, { head }) {
+    apply(t, { headGroup }) {
       const env = envelope(t, 0.7);
-      head.rotation.y += Math.sin(t * Math.PI * 2 * 4.3) * 0.3 * env;
+      headGroup.rotation.y += Math.sin(t * Math.PI * 2 * 4.3) * 0.3 * env;
     },
   },
   jump: {
     duration: 0.6,
-    apply(t, { bodyGroup }) {
-      // Single arc: rises through the first half, falls through the second.
-      // sin(πp) gives a clean 0 → 1 → 0 envelope across the duration.
+    apply(t, { root }) {
       const p = t / 0.6;
-      bodyGroup.position.y += Math.sin(p * Math.PI) * 0.6;
+      root.position.y += Math.sin(p * Math.PI) * 0.6;
     },
   },
   spin: {
     duration: 0.9,
-    apply(t, { bodyGroup }) {
-      // Smooth ease-in-out 360° rotation about the body's vertical axis.
-      // Using a sin-derived ease keeps start/end velocity at 0 so it
-      // doesn't snap into or out of the spin.
+    apply(t, { root }) {
       const p = Math.min(1, t / 0.9);
       const eased = 0.5 - 0.5 * Math.cos(p * Math.PI);
-      bodyGroup.rotation.y += eased * Math.PI * 2;
+      root.rotation.y += eased * Math.PI * 2;
     },
   },
   wiggle: {
     duration: 1.0,
-    apply(t, { bodyGroup }) {
+    apply(t, { root }) {
       const env = envelope(t, 1.0);
-      bodyGroup.rotation.z += Math.sin(t * Math.PI * 2 * 3.0) * 0.2 * env;
+      root.rotation.z += Math.sin(t * Math.PI * 2 * 3.0) * 0.2 * env;
     },
   },
 };
 
+// Base rest rotation of the shoulder groups, set in Puppet's constructor:
+// shoulder.rotation.z = sx * 0.15. Resetting to these each frame keeps
+// idle-arm-wiggle and gesture deltas additive without accumulating.
+const SHOULDER_REST_LZ = -0.15;
+const SHOULDER_REST_RZ = 0.15;
+
 /**
- * Stylized colorful human stage puppet. Same public interface as the
- * legacy mascot rig it replaced. Emotions are persistent biases blended
- * into idle animation, gestures are one-shots layered on top, speaking
- * drives a mouth pulse and a subtle head micro-nod.
+ * AI-driven hand-puppet rig. Subclasses Puppet so it inherits the
+ * sphere-head split-jaw look; speaking drives the shared `setOpen`,
+ * gestures animate the shared shoulder groups, emotion modulates brow
+ * positions and eye scale on the inherited references. Distinct from
+ * the user puppet via theme (lavender/mustard/teal) and small ears
+ * added on top of the base rig.
  */
-// Native rig size matched roughly to the legacy rig so callers (main.ts,
-// showcase) can use the same positioning without changes.
-const RIG_SCALE = 0.62;
-
-export class StagePuppet implements PuppetModel {
-  readonly root = new THREE.Group();
-
-  private rig: THREE.Group;
-  private bodyGroup: THREE.Group;
-  private head: THREE.Group;
-  private leftEye: THREE.Mesh;
-  private rightEye: THREE.Mesh;
-  private leftPupil: THREE.Mesh;
-  private rightPupil: THREE.Mesh;
-  private leftBrow: THREE.Mesh;
-  private rightBrow: THREE.Mesh;
-  private mouth: THREE.Mesh;
-  private leftArm: THREE.Group;
-  private rightArm: THREE.Group;
-
-  private readonly leftArmHome: THREE.Vector3;
-  private readonly rightArmHome: THREE.Vector3;
-  private readonly browBaseY: number;
-
-  private t = Math.random() * 10;
-  private nextBlink = 1.5 + Math.random() * 3;
-  private blinkT = -1;
-  private blinkSuppress = 0;
-
-  private emotion: Emotion = "neutral";
+export class StagePuppet extends Puppet {
   private params: EmotionParams = { ...EMOTIONS.neutral };
   private targetParams: EmotionParams = { ...EMOTIONS.neutral };
+  private blinkSuppress = 0;
 
   private gesture: Gesture = "none";
   private gestureT = 0;
@@ -255,248 +220,73 @@ export class StagePuppet implements PuppetModel {
   private speakingEnv = 0;
   private speakingT = 0;
 
-  // Glance bias supplied via setGaze and consumed by update().
+  private t = Math.random() * 10;
   private glanceX = 0;
   private glanceY = 0;
 
-  // Slot groups for cosmetics. Lazily created on first attach() so we
-  // don't litter empty Groups on rigs that never get dressed.
-  private slotGroups: Partial<Record<SlotName, THREE.Group>> = {};
+  // Inner-end y offset of brows. Brow base position is inherited from
+  // Puppet (y=0.74); we layer emotion offsets on top.
+  private static BROW_BASE_Y = 0.74;
 
   constructor() {
-    const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.85 });
-    const shirt = new THREE.MeshStandardMaterial({ color: SHIRT, roughness: 0.9 });
-    const hair = new THREE.MeshStandardMaterial({ color: HAIR, roughness: 0.8 });
-    const eyeWhite = new THREE.MeshStandardMaterial({ color: EYE_WHITE, roughness: 0.4 });
-    const dark = new THREE.MeshStandardMaterial({ color: DARK, roughness: 0.5 });
-    const nose = new THREE.MeshStandardMaterial({ color: NOSE, roughness: 0.85 });
+    super(PUPPET_THEMES.stage);
 
-    // rig wraps bodyGroup so the native geometry can be scaled once to
-    // match the legacy rig's native size, independent of root.scale which
-    // is set by the caller each frame.
-    this.rig = new THREE.Group();
-    this.rig.scale.setScalar(RIG_SCALE);
-    this.root.add(this.rig);
-
-    this.bodyGroup = new THREE.Group();
-    this.rig.add(this.bodyGroup);
-
-    // Torso — narrow shirt so shoulders sit clearly outside the body line.
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.2, 8, 16), shirt);
-    torso.position.y = -0.7;
-    this.bodyGroup.add(torso);
-
-    // Shoulder yoke — wider than the torso, narrower than the head. Gives a
-    // clear collar/shoulder line that reads as human.
-    const yoke = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.5, 6, 10), shirt);
-    yoke.rotation.z = Math.PI / 2;
-    yoke.position.y = -0.15;
-    this.bodyGroup.add(yoke);
-
-    // Neck — short cylinder between the yoke and the head.
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.4, 0.35, 16), skin);
-    neck.position.y = 0.2;
-    this.bodyGroup.add(neck);
-
-    // Head group — all face features so head rotations move them together.
-    this.head = new THREE.Group();
-    this.head.position.y = 1.1;
-    this.bodyGroup.add(this.head);
-
-    // Skull — slightly taller than wide so the face reads human, not ball.
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(1.05, 28, 22), skin);
-    skull.scale.set(1.0, 1.08, 0.95);
-    this.head.add(skull);
-
-    // Chin hint — small squashed sphere below the main skull to give the
-    // head a jaw shape without a second silhouette.
-    const chin = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 14), skin);
-    chin.position.set(0, -0.55, 0.2);
-    chin.scale.set(1.0, 0.7, 0.85);
-    this.head.add(chin);
-
-    // Hair — a dome covering the top third of the head. Hairline sits
-    // above the brows so the forehead is visible lavender skin.
-    const hairCap = new THREE.Mesh(
-      new THREE.SphereGeometry(1.1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2.3),
-      hair,
-    );
-    hairCap.position.y = 0.1;
-    hairCap.scale.set(1.02, 0.95, 1.0);
-    this.head.add(hairCap);
-
-    // Bangs — small forward fringe tucked under the front of the cap,
-    // adding a hint of hair over the forehead without covering the brows.
-    const bangs = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 10), hair);
-    bangs.scale.set(1.02, 0.22, 0.55);
-    bangs.position.set(0, 0.78, 0.58);
-    this.head.add(bangs);
-
-    // Ears — small squashed spheres on each side, under the hair line.
-    const earGeom = new THREE.SphereGeometry(0.22, 14, 12);
-    const leftEar = new THREE.Mesh(earGeom, skin);
-    leftEar.position.set(-1.02, -0.05, 0.05);
-    leftEar.scale.set(0.5, 1.2, 0.85);
-    this.head.add(leftEar);
-    const rightEar = new THREE.Mesh(earGeom, skin);
-    rightEar.position.set(1.02, -0.05, 0.05);
-    rightEar.scale.set(0.5, 1.2, 0.85);
-    this.head.add(rightEar);
-
-    // Eyes — white spheres with iris spheres sitting slightly forward so
-    // they read as pupils when the camera sees them.
-    const makeEye = (sx: number) => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 14), eyeWhite);
-      eye.position.set(sx * 0.4, 0.12, 0.78);
-      this.head.add(eye);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), dark);
-      pupil.position.set(sx * 0.4, 0.12, 1.02);
-      this.head.add(pupil);
-      return { eye, pupil };
-    };
-    const l = makeEye(-1);
-    const r = makeEye(1);
-    this.leftEye = l.eye;
-    this.rightEye = r.eye;
-    this.leftPupil = l.pupil;
-    this.rightPupil = r.pupil;
-
-    // Brows — thin boxes above each eye. Box pivot is at its center; we
-    // offset by rotating the mesh inside a group so rotation happens about
-    // the inner end (for inner-up/outer-down type expressions).
-    this.browBaseY = 0.5;
-    const makeBrow = (sx: number) => {
-      const g = new THREE.Group();
-      g.position.set(sx * 0.42, this.browBaseY, 0.9);
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.08), dark);
-      g.add(mesh);
-      this.head.add(g);
-      return mesh;
-    };
-    this.leftBrow = makeBrow(-1);
-    this.rightBrow = makeBrow(1);
-
-    // Nose — small sphere between eyes and mouth, pushed forward so it
-    // clears the skull surface and reads as a distinct feature.
-    const noseMesh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), nose);
-    noseMesh.position.set(0, -0.1, 1.05);
-    noseMesh.scale.set(1, 1.1, 1.2);
-    this.head.add(noseMesh);
-
-    // Mouth — a dark flattened ellipse. Hidden at rest; Y-scale opens it
-    // when speaking, matching the legacy rig's mouth behavior.
-    this.mouth = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 12), dark);
-    this.mouth.scale.set(1.5, 0.5, 0.5);
-    this.mouth.position.set(0, -0.42, 0.88);
-    this.mouth.visible = false;
-    this.head.add(this.mouth);
-
-    // Arms — groups pivoted at the shoulder outside the torso. Each arm
-    // tilts slightly outward so the hand clears the body.
-    this.leftArmHome = new THREE.Vector3(-0.95, -0.15, 0);
-    this.rightArmHome = new THREE.Vector3(0.95, -0.15, 0);
-    const makeArm = (sx: number, home: THREE.Vector3) => {
-      const group = new THREE.Group();
-      group.position.copy(home);
-      // Upper arm hangs down-and-slightly-out so hands clear the body.
-      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.0, 8, 14), shirt);
-      upper.position.set(sx * 0.12, -0.6, 0);
-      upper.rotation.z = -sx * 0.14;
-      group.add(upper);
-      // Hand — sphere at the end of the arm.
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 14), skin);
-      hand.position.set(sx * 0.28, -1.15, 0);
-      hand.scale.set(1, 0.9, 0.8);
-      group.add(hand);
-      this.bodyGroup.add(group);
-      return group;
-    };
-    this.leftArm = makeArm(-1, this.leftArmHome);
-    this.rightArm = makeArm(1, this.rightArmHome);
+    // Variation: small visible ears. Puppet has none, so ears read as
+    // a distinct silhouette element without conflicting with the head
+    // cosmetic slot (which mounts above the skull).
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: PUPPET_THEMES.stage.skin,
+      roughness: 0.85,
+    });
+    const earGeom = new THREE.SphereGeometry(0.18, 14, 12);
+    const leftEar = new THREE.Mesh(earGeom, skinMat);
+    leftEar.position.set(-1.0, 0.1, 0);
+    leftEar.scale.set(0.5, 1.1, 0.85);
+    this.upperJaw.add(leftEar);
+    const rightEar = new THREE.Mesh(earGeom, skinMat);
+    rightEar.position.set(1.0, 0.1, 0);
+    rightEar.scale.set(0.5, 1.1, 0.85);
+    this.upperJaw.add(rightEar);
   }
 
-  // Mouth is TTS-driven via setSpeaking; setOpen is a no-op here so the
-  // unified PuppetModel interface stays uniform across rigs.
-  setOpen(_amount: number) {}
-
-  setRoll(rad: number) {
-    this.root.rotation.z = rad;
-  }
-
-  /** Returns a slot group at the named cosmetic anchor on this rig.
-   *  The SceneController mounts asset meshes inside the slot group;
-   *  gestures and idle motion rotate the slot's *parent*, so contents
-   *  follow naturally without animation conflict. */
-  attach(slot: SlotName): THREE.Group {
-    const cached = this.slotGroups[slot];
-    if (cached) return cached;
-    const g = new THREE.Group();
-    switch (slot) {
-      case "head":
-        // Top of the skull: above the hair cap.
-        g.position.set(0, 0.6, 0);
-        this.head.add(g);
-        break;
-      case "eyes":
-        // Just in front of the eye line, between the pupils.
-        g.position.set(0, 0.12, 1.05);
-        this.head.add(g);
-        break;
-      case "neck":
-        // Between yoke and head. bodyGroup-relative; the neck mesh sits
-        // around y = 0.2 in the same group.
-        g.position.set(0, 0.25, 0.05);
-        this.bodyGroup.add(g);
-        break;
-      case "hand_left":
-        // Inside the left arm group; hand mesh is at y = -1.15.
-        g.position.set(-0.12, -1.15, 0);
-        this.leftArm.add(g);
-        break;
-      case "hand_right":
-        g.position.set(0.12, -1.15, 0);
-        this.rightArm.add(g);
-        break;
-    }
-    this.slotGroups[slot] = g;
-    return g;
-  }
-
-  setGaze(gx: number, gy: number) {
-    // Persist a glance bias used by the next update() tick. StagePuppet's
-    // existing update(dt, glanceX, glanceY) signature already does the
-    // work — this just stores the values for the next frame.
+  override setGaze(gx: number, gy: number) {
+    // Persist for next update; the actual head/eye rotation is applied
+    // in update() so it can layer with emotion-driven head tilt.
     this.glanceX = gx;
     this.glanceY = gy;
   }
 
-  setEmotion(e: Emotion) {
-    if (e === this.emotion) return;
-    this.emotion = e;
-    this.targetParams = EMOTIONS[e];
-    if (EMOTIONS[e].blinkSuppress > 0) this.blinkSuppress = EMOTIONS[e].blinkSuppress;
+  override setEmotion(emotion: Emotion) {
+    this.targetParams = EMOTIONS[emotion];
+    if (EMOTIONS[emotion].blinkSuppress > 0) {
+      this.blinkSuppress = EMOTIONS[emotion].blinkSuppress;
+    }
   }
 
-  playGesture(g: Gesture) {
-    if (!GESTURES[g]) {
+  override playGesture(gesture: Gesture) {
+    if (!GESTURES[gesture]) {
       this.gesture = "none";
       return;
     }
-    this.gesture = g;
+    this.gesture = gesture;
     this.gestureT = 0;
   }
 
-  setSpeaking(on: boolean) {
+  override setSpeaking(on: boolean) {
     this.speaking = on;
   }
 
-  update(dt: number) {
-    const glanceX = this.glanceX;
-    const glanceY = this.glanceY;
+  // setOpen is hand-tracking-driven on Puppet; on StagePuppet it's
+  // entirely TTS-driven via setSpeaking. We override to no-op so any
+  // accidental setOpen call from a controller doesn't fight the speaking
+  // envelope.
+  override setOpen(_amount: number): void {}
+
+  override update(dt: number) {
     this.t += dt;
     this.blinkSuppress = Math.max(0, this.blinkSuppress - dt);
 
-    // Ease current emotion params toward target over ~300 ms.
+    // Ease emotion params toward target over ~300ms.
     const k = 1 - Math.exp(-dt / 0.3);
     const p = this.params;
     const tgt = this.targetParams;
@@ -512,66 +302,56 @@ export class StagePuppet implements PuppetModel {
     p.browAngle += (tgt.browAngle - p.browAngle) * k;
     p.headTiltZ += (tgt.headTiltZ - p.headTiltZ) * k;
 
-    // Reset transforms so gesture offsets don't accumulate frame-over-frame.
-    this.bodyGroup.position.set(0, 0, 0);
-    this.bodyGroup.rotation.set(0, 0, 0);
-    this.bodyGroup.scale.setScalar(1);
-    this.head.position.set(0, 1.0, 0);
-    this.head.rotation.set(0, 0, 0);
-    this.leftArm.position.copy(this.leftArmHome);
-    this.rightArm.position.copy(this.rightArmHome);
-    this.leftArm.rotation.set(0, 0, 0);
-    this.rightArm.rotation.set(0, 0, 0);
+    // Reset rotations that we layer on (position is set absolutely by
+    // the AI controller each frame, so position deltas are naturally
+    // single-frame; rotation we have to reset).
+    this.root.rotation.set(0, 0, 0);
+    this.headGroup.rotation.set(0, 0, 0);
+    this.leftShoulder.rotation.set(0, 0, SHOULDER_REST_LZ);
+    this.rightShoulder.rotation.set(0, 0, SHOULDER_REST_RZ);
 
-    // Idle body bob and sway.
-    this.bodyGroup.position.y = Math.sin(this.t * 2.4) * 0.08;
-    this.bodyGroup.position.z = p.bodyOffsetZ;
-    this.bodyGroup.rotation.z =
+    // Idle body sway via root rotation (subtle z-roll). Position bobble
+    // already comes from the AI controller's rise animation.
+    this.root.rotation.z =
       Math.sin(this.t * 1.1 * p.rockSpeed) * 0.04 * p.rockAmp + p.bodyTiltZ;
 
-    // Emotion head tilt + vertical gaze head tilt. Up (+gy) tilts the head
-    // back (negative rotation.x so the face lifts); down does the opposite.
-    this.head.rotation.z = p.headTiltZ;
-    const gy = Math.max(-1, Math.min(1, glanceY));
-    this.head.rotation.x = -gy * 0.18;
+    // Gaze: head rotation comes from setGaze + emotion head tilt.
+    const gx = Math.max(-1, Math.min(1, this.glanceX));
+    const gy = Math.max(-1, Math.min(1, this.glanceY));
+    this.headGroup.rotation.y = gx * 0.5;
+    this.headGroup.rotation.x = -gy * 0.35;
+    this.headGroup.rotation.z = p.headTiltZ;
 
-    // Speaking envelope.
+    // Speaking envelope drives jaw open via the inherited setOpen on
+    // upper/lower jaws. Use super to bypass our no-op override.
     this.speakingT += dt;
-    this.speakingEnv += ((this.speaking ? 1 : 0) - this.speakingEnv) * (1 - Math.exp(-dt / 0.09));
-
-    // Idle arm wiggle + speaking boost.
-    const armAmp = p.armAmp * (1 + this.speakingEnv * 0.4);
-    this.leftArm.rotation.z = (Math.sin(this.t * 1.8) * 0.12 + 0.08) * armAmp;
-    this.rightArm.rotation.z = (Math.sin(this.t * 1.8 + Math.PI) * 0.12 - 0.08) * armAmp;
-
-    // Mouth pulse (when speaking) + subtle head micro-nod. Mouth is hidden
-    // when not speaking; Y-scale pulses between a thin line and the full
-    // ellipse while the envelope is open.
+    this.speakingEnv +=
+      ((this.speaking ? 1 : 0) - this.speakingEnv) * (1 - Math.exp(-dt / 0.09));
     const mouthPulse = 0.5 + 0.5 * Math.sin(this.speakingT * Math.PI * 2 * 4.2);
     const mouthOpen = this.speakingEnv * (0.2 + 0.8 * mouthPulse);
-    this.head.rotation.x += mouthOpen * 0.04;
-    this.mouth.scale.y = 0.5 * mouthOpen;
-    this.mouth.visible = mouthOpen > 0.02;
+    super.setOpen(mouthOpen * 0.6);
+    // Subtle head micro-nod on each speaking pulse.
+    this.headGroup.rotation.x += mouthOpen * 0.04;
 
-    // Brows: reset, then apply emotion offsets + angles.
+    // Idle arm wiggle + emotion-modulated arm amplitude.
+    const armAmp = p.armAmp * (1 + this.speakingEnv * 0.4);
+    this.leftShoulder.rotation.z =
+      SHOULDER_REST_LZ + (Math.sin(this.t * 1.8) * 0.12 + 0.08) * armAmp;
+    this.rightShoulder.rotation.z =
+      SHOULDER_REST_RZ + (Math.sin(this.t * 1.8 + Math.PI) * 0.12 - 0.08) * armAmp;
+
+    // Brows: layer emotion offsets on top of the inherited rest position.
     const setBrow = (brow: THREE.Mesh, side: number) => {
-      // Inner end is at side=+1 for left brow (sx=-1), side=-1 for right.
-      // Simpler: the group position carries the horizontal offset; height
-      // offset mixes inner/outer based on side sign of the brow.
       const inner = p.browInner;
       const outer = p.browOuter;
-      // Average height for vertical lift.
       const yOff = (inner + outer) * 0.5;
-      brow.position.y = yOff;
-      // Rotate: side=-1 is the left brow, positive rotation raises its
-      // outer (left) end; side=+1 is the right, needs opposite sign for the
-      // same visual "inner-down outer-up" effect.
-      brow.rotation.z = p.browAngle * side;
+      brow.position.y = StagePuppet.BROW_BASE_Y + yOff;
+      brow.rotation.z = -side * 0.18 + p.browAngle * side;
     };
     setBrow(this.leftBrow, -1);
     setBrow(this.rightBrow, 1);
 
-    // Layer active gesture on top.
+    // Layer active gesture on top of everything.
     if (this.gesture !== "none") {
       const spec = GESTURES[this.gesture];
       if (spec) {
@@ -580,25 +360,26 @@ export class StagePuppet implements PuppetModel {
           this.gesture = "none";
         } else {
           spec.apply(this.gestureT, {
-            leftArm: this.leftArm,
-            rightArm: this.rightArm,
-            bodyGroup: this.bodyGroup,
-            head: this.head,
+            leftShoulder: this.leftShoulder,
+            rightShoulder: this.rightShoulder,
+            root: this.root,
+            headGroup: this.headGroup,
           });
         }
       }
     }
 
-    // Eye glance — shift pupils toward (glanceX, glanceY) within each eye.
-    const gx = Math.max(-1, Math.min(1, glanceX));
-    const pupilShiftX = gx * 0.08;
-    const pupilShiftY = gy * 0.07;
-    this.leftPupil.position.x = -0.4 + pupilShiftX;
-    this.rightPupil.position.x = 0.4 + pupilShiftX;
-    this.leftPupil.position.y = 0.12 + pupilShiftY;
-    this.rightPupil.position.y = 0.12 + pupilShiftY;
+    // Eye glance: shift pupils within each eye toward the gaze direction.
+    const pupilShiftX = gx * 0.04;
+    const pupilShiftY = gy * 0.04;
+    this.leftPupil.position.x = pupilShiftX;
+    this.leftPupil.position.y = pupilShiftY;
+    this.rightPupil.position.x = pupilShiftX;
+    this.rightPupil.position.y = pupilShiftY;
 
-    // Blink.
+    // Blink + emotion-driven eye scale. We override Puppet's blink loop
+    // because we want to factor in blinkRate (emotion-modulated) and the
+    // emotion eyeScaleY.
     const blinkRate = Math.max(0.05, p.blinkRate);
     this.nextBlink -= dt * blinkRate;
     let blinkScale = 1;
@@ -616,9 +397,11 @@ export class StagePuppet implements PuppetModel {
       this.nextBlink = 2 + Math.random() * 3.5;
     }
     const finalEyeY = p.eyeScaleY * blinkScale;
-    this.leftEye.scale.y = finalEyeY;
-    this.rightEye.scale.y = finalEyeY;
+    this.leftEyeMesh.scale.y = finalEyeY;
+    this.rightEyeMesh.scale.y = finalEyeY;
     this.leftPupil.scale.y = finalEyeY;
     this.rightPupil.scale.y = finalEyeY;
+
+    // Skip super.update(dt) — its blink loop would fight ours.
   }
 }

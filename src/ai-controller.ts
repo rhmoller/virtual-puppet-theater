@@ -76,7 +76,7 @@ export class AiPuppetController {
     root.position.x = this.settledX;
     root.position.y = belowY + (settledY - belowY) * this.rise;
     root.position.z = this.opts.puppetZ;
-    root.scale.setScalar(0.65 * this.opts.depthScale);
+    root.scale.setScalar(0.9 * this.opts.depthScale);
 
     // Glance toward the user puppet if visible, blended with the most
     // recent brain-supplied gaze bias.
