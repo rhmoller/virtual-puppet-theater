@@ -10,7 +10,7 @@ slightly wrong (fast user turns, CDN compromise, browser resize, LLM
 truncation).
 
 Users and scenarios unchanged — a kid with a webcam, one or two hands on
-stage, Clawd reacting. Success is that nobody notices a difference except
+stage, the AI puppet reacting. Success is that nobody notices a difference except
 the maintainer, who now has tests and a more navigable `main.ts`.
 
 ## Scope — six items
@@ -72,11 +72,11 @@ the maintainer, who now has tests and a more navigable `main.ts`.
 
 **Resolution.** Extract into three siblings, leave `main.ts` as bootstrap + render loop:
 
-- `src/speech.ts` — `pickClawdVoice`, `speakNow`, `speak`, voice/unlock queue. Exports `speak(text: string)` and `installSpeechUnlock()` (wires gesture listeners). Owns all TTS globals.
+- `src/speech.ts` — `pickStageVoice`, `speakNow`, `speak`, voice/unlock queue. Exports `speak(text: string)` and `installSpeechUnlock()` (wires gesture listeners). Owns all TTS globals.
 - `src/welcome.ts` — `announceWelcome()` and its gesture-fallback timer.
 - `src/landmarks.ts` — `drawHandLandmarks`, `drawLandmarks`, landmark canvas setup.
 
-`main.ts` retains: renderer/scene/camera setup, resize, puppet/ragdoll/Clawd instantiation, the `frame()` loop, `applyAction`, Brain instantiation, camera init IIFE, loader tick, debug key binding.
+`main.ts` retains: renderer/scene/camera setup, resize, puppet/ragdoll/stage-puppet instantiation, the `frame()` loop, `applyAction`, Brain instantiation, camera init IIFE, loader tick, debug key binding.
 
 No behavior change. No `console.log` gating in this item (that's follow-up work).
 
@@ -85,7 +85,7 @@ No behavior change. No `console.log` gating in this item (that's follow-up work)
 **Success criteria:**
 - `SPLIT-1`: `main.ts` is < 450 lines (originally 698). Landed at 441 — the sub-400 target was relaxed at review time to avoid forcing an extraction beyond a natural boundary.
 - `SPLIT-2`: Each new file has a single, nameable concern.
-- `SPLIT-3`: `bun run build` succeeds. App behaves identically in manual smoke test (loader → welcome line → hand raises → puppet on stage → Clawd reacts).
+- `SPLIT-3`: `bun run build` succeeds. App behaves identically in manual smoke test (loader → welcome line → hand raises → puppet on stage → AI puppet reacts).
 
 ### 6. Debounce `Theater.layout()` on resize (frontend)
 
@@ -138,7 +138,7 @@ server/
 src/
   brain.ts          WebSocket client + STT (item 4)
   brain.test.ts     NEW — item 4 lifecycle test
-  clawd.ts          Mascot rig (unchanged)
+  clawd.ts          Legacy mascot rig (unchanged)
   landmarks.ts      NEW — debug landmark canvas (item 5)
   main.ts           Bootstrap + render loop (items 5, 6)
   puppet.ts         Puppet rig (unchanged)
@@ -157,7 +157,7 @@ Follow the existing code. No new conventions introduced by this sprint.
 Concrete reminders:
 
 - **TypeScript strict, bundler resolution**, `.ts` extensions on imports (matches `server/*.ts` imports in frontend files).
-- **No classes for new modules unless they hold state** — `speech.ts`, `welcome.ts`, `landmarks.ts` export functions with module-level state (mirrors the current pattern of `pickClawdVoice` + `speakNow` living at module scope in `main.ts`).
+- **No classes for new modules unless they hold state** — `speech.ts`, `welcome.ts`, `landmarks.ts` export functions with module-level state (mirrors the current pattern of `pickStageVoice` + `speakNow` living at module scope in `main.ts`).
 - **`console.log("[tag]", …)` logging** stays as-is (gating is a follow-up).
 - Match the existing indentation (2 spaces), trailing commas, double quotes.
 - No semicolons? — the project uses semicolons. Keep them.
@@ -165,7 +165,7 @@ Concrete reminders:
 Example new-file shape (`src/speech.ts` sketch):
 
 ```ts
-// src/speech.ts — Clawd's TTS. Handles browser voice list loading, the
+// src/speech.ts — Stage-puppet TTS. Handles browser voice list loading, the
 // autoplay-policy gesture unlock, and queuing utterances that arrive
 // before both are ready.
 let speechUnlocked = false;
@@ -197,7 +197,7 @@ export function cancelSpeech() { window.speechSynthesis?.cancel(); }
 **Manual verification checklist** (per PR, before merge):
 - `bun run build` succeeds.
 - `bun test` passes.
-- Local smoke: loader completes → welcome line plays → raise a hand → puppet appears → Clawd reacts within ~3 s → speak → Clawd replies.
+- Local smoke: loader completes → welcome line plays → raise a hand → puppet appears → AI puppet reacts within ~3 s → speak → AI puppet replies.
 - Resize window fast: no hitching (item 6 specific).
 
 ## Boundaries
@@ -266,7 +266,7 @@ Red-first: write the four failing tests, then implement.
 - **Verify:**
   - `bun test` passes.
   - `bun run build` passes.
-  - Manual smoke: speak a short sentence, Clawd replies within ~3 s.
+  - Manual smoke: speak a short sentence, AI puppet replies within ~3 s.
 - **Files:** new `server/session.test.ts`, `server/session.ts`.
 
 ### Task 2 — `max_tokens` bump
@@ -313,7 +313,7 @@ Pure refactor. No behavior changes, no logging changes, no type changes.
 - **Verify:**
   - `bun run build` passes.
   - `bun test` passes (no new tests; existing ones still green).
-  - Full manual smoke: loader → welcome line plays on first click → raise hand → puppet appears → speak → Clawd replies with gesture + emotion.
+  - Full manual smoke: loader → welcome line plays on first click → raise hand → puppet appears → speak → AI puppet replies with gesture + emotion.
 - **Files:** `src/main.ts`, new `src/speech.ts`, new `src/welcome.ts`, new `src/landmarks.ts`.
 
 ### Task 6 — Debounce `Theater.layout()` on resize
@@ -329,7 +329,7 @@ Pure refactor. No behavior changes, no logging changes, no type changes.
 ### Task 7 — Final smoke test and tag
 
 - **Acceptance:**
-  - End-to-end manual smoke test from a clean `bun run dev:server` + `bun run dev`: loader completes → welcome line → raise a hand → puppet → speak → Clawd responds (say + emotion + gesture) → lower hand → Clawd slides onstage.
+  - End-to-end manual smoke test from a clean `bun run dev:server` + `bun run dev`: loader completes → welcome line → raise a hand → puppet → speak → AI puppet responds (say + emotion + gesture) → lower hand → AI puppet slides onstage.
   - Annotated git tag `end-to-end-mvp-hardened` placed on the final commit.
 - **Verify:**
   - `git tag --list | grep end-to-end-mvp-hardened` prints the tag.

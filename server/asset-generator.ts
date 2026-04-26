@@ -13,8 +13,8 @@
 // - Cache: an in-process Map keyed by a normalized description hash so
 //   the second ask for the same thing is sub-second.
 // - Errors (timeout, schema fail) are swallowed at the call site —
-//   Clawd's stall line covers the brief silence and he can comment
-//   naturally on the next turn that he couldn't picture it.
+//   the stage puppet's stall line covers the brief silence and it can
+//   comment naturally on the next turn that it couldn't picture it.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { ASSET_SPEC_JSON_SCHEMA, type AssetSpec } from "./protocol.ts";

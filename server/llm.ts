@@ -96,7 +96,7 @@ export class AnthropicBackend implements LLMBackend {
       )
       .join("\n");
 
-    const prompt = `Pick the best voice for Clawd, a cheerful, goofy male hand-puppet speaking English to young kids. The voice should sound:
+    const prompt = `Pick the best voice for a cheerful, goofy male hand-puppet speaking English to young kids. The voice should sound:
 - Clearly male, warm, friendly, a little playful
 - English (en-*), any dialect
 - Clear and pleasant for kids — not robotic, not monotone, not sinister

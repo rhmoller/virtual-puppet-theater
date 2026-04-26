@@ -1,9 +1,9 @@
-// src/speech.ts — Clawd's TTS. Primary path streams MP3 from the server's
-// /tts endpoint (ElevenLabs); browser speechSynthesis is the fallback if
-// /tts errors. Queues utterances that arrive before the autoplay-policy
-// unlock, then flushes on the first user gesture. Serializes sequential
-// replies so a new utterance waits for the current one to finish instead
-// of cutting it off mid-sentence.
+// src/speech.ts — Stage-puppet TTS. Primary path streams MP3 from the
+// server's /tts endpoint (ElevenLabs); browser speechSynthesis is the
+// fallback if /tts errors. Queues utterances that arrive before the
+// autoplay-policy unlock, then flushes on the first user gesture.
+// Serializes sequential replies so a new utterance waits for the current
+// one to finish instead of cutting it off mid-sentence.
 
 // voiceURI chosen by the server via Claude. Null until the server picks
 // (or if the pick failed / returned no suitable voice). When null we fall
@@ -15,7 +15,7 @@ export function setSelectedVoice(voiceURI: string) {
   console.log("[tts] voice selected by brain:", voiceURI);
 }
 
-function pickClawdVoice(): SpeechSynthesisVoice | null {
+function pickStageVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
   if (selectedVoiceURI) {
     const chosen = voices.find((v) => v.voiceURI === selectedVoiceURI);
@@ -92,9 +92,10 @@ let playing = false;
 let currentAudio: HTMLAudioElement | null = null;
 let elevenAvailable = true;
 
-// Speaking-burst callback: fires once when Clawd starts talking and once
-// when the burst drains (queue empty, nothing in flight). Used by Clawd's
-// lip-sync animation so it covers the whole burst, not just one utterance.
+// Speaking-burst callback: fires once when the puppet starts talking and
+// once when the burst drains (queue empty, nothing in flight). Used by
+// the puppet's lip-sync animation so it covers the whole burst, not just
+// one utterance.
 type SpeakingCallback = (speaking: boolean) => void;
 let speakingCallback: SpeakingCallback | null = null;
 let burstSpeaking = false;
@@ -208,7 +209,7 @@ function speakNowBrowser(text: string, retry = true) {
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 1.0;
   utter.pitch = 0.9;
-  const voice = pickClawdVoice();
+  const voice = pickStageVoice();
   if (voice) utter.voice = voice;
   const voiceInfo = voice
     ? {

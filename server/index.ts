@@ -68,7 +68,7 @@ const server = Bun.serve<SocketData, string>({
         if (typeof body.text !== "string" || body.text.length === 0) {
           return new Response("missing text", { status: 400 });
         }
-        // Clawd's lines are short; cap at 600 to keep cost predictable
+        // The puppet's lines are short; cap at 600 to keep cost predictable
         // and reject obvious abuse.
         text = body.text.slice(0, 600);
       } catch {

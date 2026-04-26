@@ -64,7 +64,7 @@ export class SceneController {
           break;
         case "request_cosmetic":
         case "request_prop":
-          // Nothing to render yet — Clawd's stall line covers the wait.
+          // Nothing to render yet — the puppet's stall line covers the wait.
           // The asset_ready event will arrive separately.
           break;
       }

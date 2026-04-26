@@ -6,7 +6,7 @@
 
 Today the project is "an AI puppet that talks back." This pivot reframes it as **a co-creative play space** — a small theater where a child speaks, and Claude not only performs as a puppet but *directs the scene*: dressing puppets in hats and glasses, placing iconic scene props (moon, tree, sand castle) to evoke a location, and **generating brand-new assets on demand** when the child asks for something the catalog doesn't have. Generated assets are cached so the second ask is instant.
 
-A kid pulls up a hand-puppet on webcam. Claude's puppet is on stage facing them. The kid says "let's go to the beach" — a sun and a beach ball pop into the scene. "I want sunglasses!" — sunglasses appear on the kid's puppet. "Can you have a top hat?" — Claude grows one. "I want a watermelon hat!" — Claude says "ooh, let me dream that up!" and a few seconds later a watermelon-shaped hat appears on top of his head. Asked again next session, it appears instantly from cache.
+A kid pulls up a hand-puppet on webcam. Claude's puppet is on stage facing them. The kid says "let's go to the beach" — a sun and a beach ball pop into the scene. "I want sunglasses!" — sunglasses appear on the kid's puppet. "Can you have a top hat?" — Claude grows one. "I want a watermelon hat!" — Claude says "ooh, let me dream that up!" and a few seconds later a watermelon-shaped hat appears on top of its head. Asked again next session, it appears instantly from cache.
 
 The aesthetic stays: black-stage puppet theater, no full-backdrop swaps. **Locations are evoked by a few iconic props placed at named anchors — minimalist scenery, maximalist imagination.**
 
@@ -90,7 +90,7 @@ System prompt extension: catalog list, slot/anchor names, examples of multi-effe
 - System prompt: tight description of `AssetSpec` with worked examples (banana hat = yellow torus + brown cone, etc.), `cache_control: ephemeral` so the catalog/spec prefix gets reused.
 - Structured output: the same `AssetSpec` JSON schema the runtime renderer consumes.
 - Triggered server-side when `request_asset` lands in an `Action`. Conversation continues without blocking; on completion, server pushes `asset_ready` to the client.
-- Errors (timeout, schema fail) are swallowed silently — Clawd can comment naturally on the next turn.
+- Errors (timeout, schema fail) are swallowed silently — the AI puppet can comment naturally on the next turn.
 
 **Cache:** server-side `Map<descriptionHash, { name, spec }>` keyed on a normalized description (lowercase, trimmed, slot-prefixed). Cache hits emit `asset_ready` immediately on the next tick. Survives within a process across sessions; that's enough for the demo.
 
@@ -105,9 +105,9 @@ Cut order: drop Tier 3, then drop scene props down to 6, then drop the `neck` sl
 ## Demo narrative (3-min hard cap)
 
 1. **Open** — kid raises two puppets, Claude greets them. Establishes the basic interaction.
-2. **Catalog dressing** — "give Clawd a crown" → instant; "I want sunglasses" → on the user's puppet.
+2. **Catalog dressing** — "give the puppet a crown" → instant; "I want sunglasses" → on the user's puppet.
 3. **Scene placement** — "let's go to the beach" → sun + sand_castle + beach_ball appear.
-4. **The money shot** — "I want a watermelon hat!" → Clawd: "Ooh, let me dream that up!" → ~5s later it pops on. Closing tagline: *"an interface for play that didn't exist a year ago."*
+4. **The money shot** — "I want a watermelon hat!" → the AI puppet: "Ooh, let me dream that up!" → ~5s later it pops on. Closing tagline: *"an interface for play that didn't exist a year ago."*
 
 ## Verification
 

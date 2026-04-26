@@ -10,8 +10,8 @@ structural decisions, VO script with timing, and recording notes.
 - **Tone:** sincere wonder. Calm narration with quiet emotional weight
   on the wow beats. Aligns with the *Most Creative Opus 4.7* prize
   rubric, which rewards projects "with a voice."
-- **Audio:** scripted voiceover (adult) + in-app audio (Clawd's TTS,
-  user STT) ducked underneath. Music bed light, room for silence.
+- **Audio:** scripted voiceover (adult) + in-app audio (the AI puppet's
+  TTS, user STT) ducked underneath. Music bed light, room for silence.
 - **On camera:** no webcam feed except for one short hands-only
   insert that establishes the MediaPipe input. No faces shown.
 - **Voices on stage:** kid drives the imagination half (scene
@@ -45,9 +45,9 @@ VO speaking rate target: ~140 wpm (2.3 words/sec). Word counts noted.
 ```
 00:00–00:10  COLD OPEN                                   (no VO)
   Music + sizzle hits. Quick cuts:
-   • prop materializing on Clawd
+   • prop materializing on the AI puppet
    • beach scene snapping into place
-   • cosmetics landing on a user puppet
+   • cosmetics landing on the user puppet
   Optional: kid laughter laid over the materialization shot.
 
 00:10–00:14  TITLE CARD                                  (no VO)
@@ -65,7 +65,7 @@ VO speaking rate target: ~140 wpm (2.3 words/sec). Word counts noted.
   (24 words / ~10s; in-app greeting plays underneath the tail)
 
 00:30–00:55  CATALOG DRESSING                            (8s VO)
-  Adult: "give Clawd a crown."         → crown.
+  Adult: "give the puppet a crown."    → crown.
   Adult: "I want sunglasses."          → sunglasses.
   VO (low, over the second request):
        "Claude dresses the puppets and places props from a
@@ -83,21 +83,21 @@ VO speaking rate target: ~140 wpm (2.3 words/sec). Word counts noted.
 
 01:15–02:05  MONEY SHOT                                  (15s VO, split)
   Kid: "I want a [PROP]!"
-  Clawd (in-app): "Ooh, let me dream that up!"
+  AI puppet (in-app): "Ooh, let me dream that up!"
   HUD dreaming chip pulses.
 
   ── VO Phase A, over the dreaming chip (~8s, light speed-ramp) ──
-  VO: "While Clawd stalls out loud, a separate Opus 4.7
+  VO: "While the puppet stalls out loud, a separate Opus 4.7
        call is composing geometry from a handful of three.js
        primitives."
-  (19 words / ~8s)
+  (20 words / ~8s)
 
   Prop materializes, fade-in.
 
   ── VO Phase B, over the fade-in (~7s) ──
   VO: "The asset designer runs in parallel — it's always
-       Opus, even when Clawd is set to Haiku."
-  (16 words / ~7s)
+       Opus, even when the conversation puppet is on Haiku."
+  (17 words / ~7s)
 
   ── No VO over the kid's reaction. Let the moment breathe. ──
 
@@ -107,7 +107,7 @@ VO speaking rate target: ~140 wpm (2.3 words/sec). Word counts noted.
   (8 words / ~3s)
 
 02:25–02:30  CLOSE + END CARD                            (5s VO)
-  Final shot: both Clawd and the user puppet wearing the [PROP],
+  Final shot: both puppets (AI and user) wearing the [PROP],
   or a quiet beat on the assembled scene.
   VO: "An interface for play that didn't exist a year ago."
   (10 words / ~4s)
@@ -146,7 +146,7 @@ Lines to capture from the kid (multiple takes):
 - A natural reaction to the prop materializing
 - Optional: a laugh for the cold-open audio bed
 
-If he wants continuity (same Clawd already wearing the catalog
+If he wants continuity (same AI puppet already wearing the catalog
 cosmetics), set those up off-camera before he starts.
 
 ### Hands-only insert

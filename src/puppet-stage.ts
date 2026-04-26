@@ -210,13 +210,13 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
 };
 
 /**
- * Stylized colorful human stage puppet. Drop-in replacement for Clawd;
- * same public interface. Emotions are persistent biases blended into idle
- * animation, gestures are one-shots layered on top, speaking drives a
- * mouth pulse and a subtle head micro-nod.
+ * Stylized colorful human stage puppet. Same public interface as the
+ * legacy mascot rig it replaced. Emotions are persistent biases blended
+ * into idle animation, gestures are one-shots layered on top, speaking
+ * drives a mouth pulse and a subtle head micro-nod.
  */
-// Native rig size matched roughly to Clawd so callers (main.ts, showcase)
-// can use the same positioning without changes.
+// Native rig size matched roughly to the legacy rig so callers (main.ts,
+// showcase) can use the same positioning without changes.
 const RIG_SCALE = 0.62;
 
 export class StagePuppet implements PuppetModel {
@@ -272,8 +272,8 @@ export class StagePuppet implements PuppetModel {
     const nose = new THREE.MeshStandardMaterial({ color: NOSE, roughness: 0.85 });
 
     // rig wraps bodyGroup so the native geometry can be scaled once to
-    // match Clawd's native size, independent of root.scale which is set by
-    // the caller each frame.
+    // match the legacy rig's native size, independent of root.scale which
+    // is set by the caller each frame.
     this.rig = new THREE.Group();
     this.rig.scale.setScalar(RIG_SCALE);
     this.root.add(this.rig);
@@ -384,7 +384,7 @@ export class StagePuppet implements PuppetModel {
     this.head.add(noseMesh);
 
     // Mouth — a dark flattened ellipse. Hidden at rest; Y-scale opens it
-    // when speaking, matching Clawd's mouth behavior.
+    // when speaking, matching the legacy rig's mouth behavior.
     this.mouth = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 12), dark);
     this.mouth.scale.set(1.5, 0.5, 0.5);
     this.mouth.position.set(0, -0.42, 0.88);

@@ -19,12 +19,14 @@ import {
 import { SceneState, applyStateEffect } from "../src/scene-state.ts";
 import type { AssetGenerator } from "./asset-generator.ts";
 
-const SYSTEM_PROMPT = `You are Clawd, a cheerful, goofy hand-puppet AND the director of a small virtual co-creative theater. You wear two hats every turn:
+const SYSTEM_PROMPT = `You are a cheerful, goofy hand-puppet AND the director of a small virtual co-creative theater. You don't have a name yet — if the kid offers you one ("I'll call you Pip!"), warmly take it and use it from then on. Otherwise just be the puppet. Don't introduce yourself with a name on your own.
+
+You wear two hats every turn:
 
 1. Performer — you speak ("say"), feel ("emotion"), look ("gaze"), and act ("gesture").
 2. Director — you change the stage with "effects": dressing puppets in hats and glasses, placing scenery props (sun, tree, sand_castle), and dreaming up brand-new items when the kid wants something the catalog doesn't have.
 
-The two roles run TOGETHER. When the kid expresses a wish — "give Clawd a crown", "let's go to the beach", "I want sunglasses on my puppet", "I want a banana hat" — you DO it via effects, not just by talking about doing it. A turn that talks about a hat without emitting an effect is a missed opportunity. Saying "wow, sunglasses!" without dressing them onto a puppet is the wrong answer.
+The two roles run TOGETHER. When the kid expresses a wish — "give the puppet a crown", "let's go to the beach", "I want sunglasses on my puppet", "I want a banana hat" — you DO it via effects, not just by talking about doing it. A turn that talks about a hat without emitting an effect is a missed opportunity. Saying "wow, sunglasses!" without dressing them onto a puppet is the wrong answer.
 
 # Catalog (use these names verbatim in dress/place effects)
 
@@ -34,7 +36,7 @@ SCENE PROPS (${SCENE_PROP_NAMES.length}): ${SCENE_PROP_NAMES.join(", ")}
 
 # Where things go
 
-PUPPETS (for "puppet" field): "user" = the kid's hand-puppet, "ai" = you (Clawd).
+PUPPETS (for "puppet" field): "user" = the kid's hand-puppet, "ai" = you (the stage puppet).
 COSMETIC SLOTS (for "slot" field): ${SLOT_NAMES.join(", ")}.
 SCENE ANCHORS (for "anchor" field): ${ANCHOR_NAMES.join(", ")}.
 
@@ -58,11 +60,11 @@ The four ops:
 
 # Worked examples (full flat shape — copy this style)
 
-Kid: "give Clawd a crown"
+Kid: "give the puppet a crown"
   effects: [
     {"op":"dress","puppet":"ai","slot":"head","anchor":null,"asset":"crown","description":null,"request_id":null}
   ]
-  say: "A crown! For me?! Look at me, royal Clawd!"
+  say: "A crown! For me?! Look at me, royal puppet!"
 
 Kid: "let's go to the beach"
   effects: [
@@ -168,7 +170,7 @@ export class Session {
     private assetGenerator: AssetGenerator,
   ) {
     this.scheduleIdleCheck();
-    // Fire an opening line so Clawd greets the user.
+    // Fire an opening line so the puppet greets the user.
     this.prompt(
       {
         role: "user",
@@ -193,7 +195,7 @@ export class Session {
         if (event.speaking) {
           this.noteActivity();
           // First partial of a new speaking burst: interrupt any TTS in
-          // progress so Clawd isn't talking over the user.
+          // progress so the puppet isn't talking over the user.
           if (!this.inSpeakingBurst) {
             this.inSpeakingBurst = true;
             this.send({ type: "cancel_speech" });

@@ -221,14 +221,14 @@ const EFFECT_ITEM_SCHEMA = {
 } as const;
 
 export const ACTION_JSON_SCHEMA = {
-  name: "clawd_action",
+  name: "puppet_action",
   schema: {
     type: "object",
     additionalProperties: false,
     properties: {
       say: {
         type: "string",
-        description: "What Clawd says aloud. Keep it short — one or two sentences.",
+        description: "What the puppet says aloud. Keep it short — one or two sentences.",
       },
       emotion: {
         type: "string",
