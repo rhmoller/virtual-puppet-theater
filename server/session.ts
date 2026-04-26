@@ -145,6 +145,12 @@ export class Session {
   private puppetVisible = false;
   // Debounce rapid on/off flicker from hand-tracking dropouts.
   private puppetDebounce: ReturnType<typeof setTimeout> | null = null;
+  // Skip the "puppet appeared" stage note for the very first
+  // visibility transition — the constructor's opening greeting
+  // already covers the user's arrival, and a second prompt here would
+  // double up the welcome. Subsequent re-entries after a hide-and-show
+  // still trigger the stage note.
+  private hasReactedToFirstAppearance = false;
 
   private budget = new CallBudget();
   // Avoid spamming rate-limit error events when many requests trip the
@@ -219,6 +225,13 @@ export class Session {
             this.puppetDebounce = null;
             if (visible === this.puppetVisible) return;
             this.puppetVisible = visible;
+            // The very first time the puppet appears we silently record
+            // the state change but don't fire a stage note — the
+            // session-opening greeting already covered the arrival.
+            if (!this.hasReactedToFirstAppearance) {
+              this.hasReactedToFirstAppearance = true;
+              return;
+            }
             const hint = visible
               ? "The human's puppet has just appeared on stage. React to their entrance."
               : "The human's puppet has just left the stage. React to the empty spot beside you.";
