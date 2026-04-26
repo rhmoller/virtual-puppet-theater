@@ -7,8 +7,6 @@ Claude Opus 4.7.
 
 Built for the "Built with Opus" hackathon.
 
-![Built with Opus 4.7 — a global virtual hackathon, April 21–28](docs/Built_with_Opus_4.7_-_Linkedin_X_Graphic.webp)
-
 ## Stack
 
 - **Bun** — runtime and package manager
@@ -61,6 +59,8 @@ bun run dev                      # vite frontend on :5173
 ```
 
 Open the frontend, grant webcam and microphone access, raise a hand.
+
+![Built with Opus 4.7 — a global virtual hackathon, April 21–28](docs/Built_with_Opus_4.7_-_Linkedin_X_Graphic.webp)
 
 ## License
 
