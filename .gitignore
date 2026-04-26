@@ -5,6 +5,5 @@ dist
 .DS_Store
 .idea
 .vscode
-docs/specs/
 docs/hackathon-brief.md
 .claude/
