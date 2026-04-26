@@ -248,7 +248,6 @@ async function frame() {
 
   const view = viewSize(PUPPET_Z);
   userController.update(dt, handData, view);
-  flushSignal();
   brain?.notifyPuppetVisible(userController.visible);
   aiController.update(
     dt,
@@ -263,6 +262,12 @@ async function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Body-language signals are diff-based — sending them at 60Hz wastes
+// allocations and wire bytes for the rare-change shape they have.
+// 4Hz matches the puppet_state flush cadence and is plenty for the
+// LLM's reaction-time needs (next turn is 1–3s away anyway).
+setInterval(flushSignal, 250);
 
 // Brain wiring — TTS, emotion/gesture dispatch, WebSocket.
 
