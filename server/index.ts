@@ -2,6 +2,7 @@ import type { BrainSize, ClientEvent, ServerEvent } from "./protocol.ts";
 import { AnthropicBackend } from "./llm.ts";
 import { Session } from "./session.ts";
 import { AssetGenerator } from "./asset-generator.ts";
+import { synthesize } from "./tts.ts";
 import {
   IpConnectionCounter,
   GlobalCeiling,
@@ -55,6 +56,33 @@ const server = Bun.serve<SocketData, string>({
     }
     if (url.pathname === "/health") {
       return new Response("ok");
+    }
+
+    if (url.pathname === "/tts" && req.method === "POST") {
+      if (!originAllowed(req.headers)) {
+        return new Response("forbidden", { status: 403 });
+      }
+      let text: string;
+      try {
+        const body = (await req.json()) as { text?: unknown };
+        if (typeof body.text !== "string" || body.text.length === 0) {
+          return new Response("missing text", { status: 400 });
+        }
+        // Clawd's lines are short; cap at 600 to keep cost predictable
+        // and reject obvious abuse.
+        text = body.text.slice(0, 600);
+      } catch {
+        return new Response("invalid json", { status: 400 });
+      }
+      try {
+        const audio = await synthesize(text);
+        return new Response(new Blob([audio], { type: "audio/mpeg" }), {
+          headers: { "cache-control": "no-store" },
+        });
+      } catch (err) {
+        console.warn("[tts] synthesize failed:", err);
+        return new Response("tts failed", { status: 502 });
+      }
     }
 
     // Static file serving. Reject any path containing ".." as a cheap

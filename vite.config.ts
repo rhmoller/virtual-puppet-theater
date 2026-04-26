@@ -7,6 +7,9 @@ export default defineConfig({
         target: "ws://localhost:3001",
         ws: true,
       },
+      "/tts": {
+        target: "http://localhost:3001",
+      },
     },
   },
 });

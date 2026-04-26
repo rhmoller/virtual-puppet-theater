@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.0",
+    "@elevenlabs/elevenlabs-js": "^2.44.0",
     "@mediapipe/hands": "^0.4.1675469240",
     "three": "^0.184.0"
   },

@@ -13,7 +13,8 @@ Built for the "Built with Opus" hackathon.
 - **Vite** + **TypeScript** (strict) — frontend build
 - **three.js** — 3D scene
 - **@mediapipe/hands** — hand landmark tracking
-- **Web Speech API** — browser speech recognition + synthesis
+- **Web Speech API** — browser speech recognition; browser synthesis as TTS fallback
+- **@elevenlabs/elevenlabs-js** — primary TTS, gives Clawd an expressive voice
 - **@anthropic-ai/sdk** — Claude Opus 4.7 drives Clawd's dialogue and emotes
 
 ## Run it
@@ -21,6 +22,7 @@ Built for the "Built with Opus" hackathon.
 ```sh
 bun install
 export ANTHROPIC_API_KEY=...     # your Anthropic API key
+export ELEVENLABS_API_KEY=...    # your ElevenLabs API key (for Clawd's voice)
 bun run dev:server               # websocket brain on :3001
 bun run dev                      # vite frontend on :5173
 ```
