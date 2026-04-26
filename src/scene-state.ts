@@ -36,8 +36,7 @@ type PendingRequest =
 export class SceneState {
   // Per-puppet cosmetic slot occupancy.
   private worn: Record<PuppetId, WornMap> = {
-    left: {},
-    right: {},
+    user: {},
     ai: {},
   };
   // Per-anchor scene prop occupancy.
@@ -98,7 +97,7 @@ export class SceneState {
   /** Compact human-readable summary used in LLM prompts. */
   describe(): string {
     const parts: string[] = [];
-    for (const p of ["left", "right", "ai"] as const) {
+    for (const p of ["user", "ai"] as const) {
       const w = this.worn[p];
       const items = Object.entries(w)
         .map(([slot, asset]) => `${slot}=${asset}`)

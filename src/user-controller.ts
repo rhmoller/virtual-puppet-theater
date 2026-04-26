@@ -5,7 +5,7 @@ import { GestureDetector } from "./user-gesture";
 import type { UserGesture, UserPose, UserEnergy } from "../server/protocol.ts";
 
 export type HandLabel = "Left" | "Right";
-export type HandData = { lm: NormalizedLandmarkList; world: LandmarkList };
+export type HandData = { lm: NormalizedLandmarkList; world: LandmarkList; hand: HandLabel };
 export type ViewSize = { w: number; h: number };
 
 type GazeClass = "forward" | "left" | "right" | "up" | "down";
@@ -89,7 +89,6 @@ export class UserPuppetController {
 
   constructor(
     public readonly model: Puppet,
-    public readonly hand: HandLabel,
     private readonly puppetZ: number,
     private readonly depthScale: number,
   ) {
@@ -171,7 +170,7 @@ export class UserPuppetController {
       // its xy projection vanishes there and grows as the hand yaws/pitches.
       // Sign flips for the Left hand because the across-palm axis reverses.
       const side = v3sub(world[17]!, world[5]!);
-      const sign = this.hand === "Left" ? -1 : 1;
+      const sign = data.hand === "Left" ? -1 : 1;
       const normal = {
         x: sign * (side.y * fwd.z - side.z * fwd.y),
         y: sign * (side.z * fwd.x - side.x * fwd.z),

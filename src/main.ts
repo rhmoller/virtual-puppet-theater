@@ -16,7 +16,7 @@ import {
 } from "./speech";
 import { showLanding } from "./landing";
 import { Hud } from "./hud";
-import { UserPuppetController, type HandData, type HandLabel } from "./user-controller";
+import { UserPuppetController, type HandData } from "./user-controller";
 import { AiPuppetController } from "./ai-controller";
 import { SceneController } from "./scene-controller";
 import { SceneState } from "./scene-state";
@@ -82,16 +82,15 @@ function viewSize(z = 0) {
   return { w: h * camera.aspect, h };
 }
 
-// Two user-controlled puppets, one per hand, each driven by its own
-// controller. Themes are explicit so left/right have distinct identity.
-const userControllers: UserPuppetController[] = [
-  new UserPuppetController(new Puppet(PUPPET_THEMES.warm), "Left", PUPPET_Z, PUPPET_DEPTH_SCALE),
-  new UserPuppetController(new Puppet(PUPPET_THEMES.cool), "Right", PUPPET_Z, PUPPET_DEPTH_SCALE),
-];
-for (const c of userControllers) {
-  c.model.root.visible = false;
-  scene.add(c.model.root);
-}
+// Single user-controlled puppet. MediaPipe is configured for one hand;
+// whichever hand the user shows drives this puppet.
+const userController = new UserPuppetController(
+  new Puppet(PUPPET_THEMES.warm),
+  PUPPET_Z,
+  PUPPET_DEPTH_SCALE,
+);
+userController.model.root.visible = false;
+scene.add(userController.model.root);
 
 const stagePuppet = new StagePuppet();
 stagePuppet.root.visible = false;
@@ -111,8 +110,7 @@ const sceneController = new SceneController(
   sceneState,
   (puppet: PuppetId, slot: SlotName) => {
     if (puppet === "ai") return stagePuppet.attach(slot);
-    const c = userControllers.find((uc) => uc.hand === (puppet === "left" ? "Left" : "Right"));
-    return c ? c.model.attach(slot) : null;
+    return userController.model.attach(slot);
   },
   (anchor: AnchorName) => theater.anchor(anchor),
 );
@@ -144,13 +142,13 @@ if (theaterLayoutTimer !== null) {
   applyTheaterLayout();
 }
 
-const handData: Record<HandLabel, HandData | null> = { Left: null, Right: null };
+let handData: HandData | null = null;
 
 const hands = new window.Hands({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
 });
 hands.setOptions({
-  maxNumHands: 2,
+  maxNumHands: 1,
   modelComplexity: 1,
   minDetectionConfidence: 0.6,
   minTrackingConfidence: 0.5,
@@ -158,19 +156,14 @@ hands.setOptions({
 
 let lastTracking = false;
 hands.onResults((results: Results) => {
-  handData.Left = null;
-  handData.Right = null;
+  handData = null;
   if (results.multiHandLandmarks && results.multiHandedness) {
-    for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-      const lm = results.multiHandLandmarks[i];
-      const world = results.multiHandWorldLandmarks?.[i];
-      const label = results.multiHandedness[i]?.label as "Left" | "Right" | undefined;
-      if (lm && world && label && !handData[label]) {
-        handData[label] = { lm, world };
-      }
-    }
+    const lm = results.multiHandLandmarks[0];
+    const world = results.multiHandWorldLandmarks?.[0];
+    const label = results.multiHandedness[0]?.label as "Left" | "Right" | undefined;
+    if (lm && world && label) handData = { lm, world, hand: label };
   }
-  const tracking = !!handData.Left || !!handData.Right;
+  const tracking = !!handData;
   if (tracking !== lastTracking) {
     lastTracking = tracking;
     hud.setCamera(
@@ -180,46 +173,13 @@ hands.onResults((results: Results) => {
   }
 });
 
-// "Active" puppet selection: when both hands are visible, whichever has
-// the higher recent palm motion drives the pose/energy signal. Hysteresis
-// (1.5× margin against the current active) prevents thrash when motions
-// are similar.
-let activeController: UserPuppetController | null = null;
-function updateActive() {
-  const visible = userControllers.filter((c) => c.visible);
-  if (visible.length === 0) {
-    activeController = null;
-    return;
-  }
-  if (visible.length === 1) {
-    activeController = visible[0]!;
-    return;
-  }
-  const sorted = visible.toSorted((a, b) => b.recentMotion - a.recentMotion);
-  const top = sorted[0]!;
-  if (activeController === null || activeController === top) {
-    activeController = top;
-    return;
-  }
-  if (top.recentMotion > activeController.recentMotion * 1.5) {
-    activeController = top;
-  }
-}
-
 // Diff vs. last sent so we only emit a `signal` event on real change.
 let lastSentPose: UserPose | null = null;
 let lastSentEnergy: UserEnergy | null = null;
 function flushSignal() {
-  // Gestures are merged across both hands (flat list, no attribution).
-  // Drain even from the inactive hand — we don't want to lose them.
-  const gestures: UserGesture[] = [];
-  for (const c of userControllers) {
-    const drained = c.drainGestures();
-    if (drained.length > 0) gestures.push(...drained);
-  }
-
-  const pose = activeController?.pose ?? null;
-  const energy = activeController?.energy ?? null;
+  const gestures: UserGesture[] = userController.drainGestures();
+  const pose = userController.visible ? userController.pose : null;
+  const energy = userController.visible ? userController.energy : null;
 
   const delta: { gestures?: UserGesture[]; pose?: UserPose; energy?: UserEnergy } = {};
   if (gestures.length > 0) delta.gestures = gestures;
@@ -256,14 +216,13 @@ async function frame() {
   lastFrameTime = now;
 
   const view = viewSize(PUPPET_Z);
-  for (const c of userControllers) c.update(dt, handData[c.hand], view);
-  updateActive();
+  userController.update(dt, handData, view);
   flushSignal();
-  brain?.notifyPuppetVisible(userControllers[0]!.visible, userControllers[1]!.visible);
+  brain?.notifyPuppetVisible(userController.visible);
   aiController.update(
     dt,
     view,
-    userControllers.map((c) => ({ visible: c.visible, state: c.state, hand: c.hand })),
+    userController.visible ? { visible: true, state: userController.state } : null,
   );
   // Drive cosmetic / scene-prop fade-in/out animations.
   sceneController.update(dt);

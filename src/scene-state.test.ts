@@ -36,7 +36,7 @@ test("resolveAsset returns null for unknown names", () => {
 test("applyStateEffect routes dress/place/request to the right state changes", () => {
   const s = new SceneState();
   const effects: Effect[] = [
-    { op: "dress", puppet: "left", slot: "eyes", asset: "sunglasses" },
+    { op: "dress", puppet: "user", slot: "eyes", asset: "sunglasses" },
     { op: "place", anchor: "ground_left", asset: "sand_castle" },
     {
       op: "request_cosmetic",
@@ -47,7 +47,7 @@ test("applyStateEffect routes dress/place/request to the right state changes", (
     },
   ];
   for (const e of effects) applyStateEffect(s, e);
-  expect(s.wornBy("left").eyes).toBe("sunglasses");
+  expect(s.wornBy("user").eyes).toBe("sunglasses");
   expect(s.at("ground_left")).toBe("sand_castle");
   const pending = s.consumePending("r1");
   expect(pending).toEqual({
@@ -63,12 +63,12 @@ test("applyStateEffect routes dress/place/request to the right state changes", (
 test("describe summarises the scene compactly", () => {
   const s = new SceneState();
   s.dress("ai", "head", "crown");
-  s.dress("left", "eyes", "sunglasses");
+  s.dress("user", "eyes", "sunglasses");
   s.place("sky_right", "moon");
   const out = s.describe();
   expect(out).toContain("ai{");
   expect(out).toContain("crown");
-  expect(out).toContain("left{");
+  expect(out).toContain("user{");
   expect(out).toContain("sunglasses");
   expect(out).toContain("placed{");
   expect(out).toContain("moon");

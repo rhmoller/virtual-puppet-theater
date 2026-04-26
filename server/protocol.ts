@@ -85,9 +85,9 @@ export type AnchorName =
   | "ground_right"
   | "far_back";
 
-// Which puppet a `dress` effect targets. "left" / "right" are the
-// hand-controlled user puppets; "ai" is the StagePuppet.
-export type PuppetId = "left" | "right" | "ai";
+// Which puppet a `dress` effect targets. "user" is the hand-controlled
+// puppet; "ai" is the StagePuppet.
+export type PuppetId = "user" | "ai";
 
 // Parametric description of any visual asset — pre-fab or generated.
 // Composed entirely of THREE primitives so the same renderer handles
@@ -137,7 +137,7 @@ export type ClientEvent =
   | { type: "hello" }
   | { type: "transcript"; text: string; final: boolean }
   | { type: "user_speaking"; speaking: boolean }
-  | { type: "puppet_state"; leftVisible: boolean; rightVisible: boolean }
+  | { type: "puppet_state"; visible: boolean }
   | { type: "voice_list"; voices: VoiceInfo[] }
   // Streamed body-language updates. Each field is optional — the client
   // sends only what changed since the last signal. The server buffers
@@ -189,7 +189,7 @@ const EFFECT_ITEM_SCHEMA = {
     puppet: {
       type: ["string", "null"],
       description:
-        'Required for op="dress" and op="request_cosmetic". One of: "left", "right", "ai". null otherwise.',
+        'Required for op="dress" and op="request_cosmetic". One of: "user", "ai". null otherwise.',
     },
     slot: {
       type: ["string", "null"],

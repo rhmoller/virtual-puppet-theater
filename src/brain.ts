@@ -24,7 +24,7 @@ export class Brain {
   private ws: WebSocket | null = null;
   private reconnectDelay = 500;
   private stt: SpeechRecognitionLike | null = null;
-  private puppetState = { leftVisible: false, rightVisible: false };
+  private puppetState = { visible: false };
   private puppetStateDirty = false;
   private clientReady = false;
   private stopped = false;
@@ -81,14 +81,9 @@ export class Brain {
     if (this.ws?.readyState === WebSocket.OPEN) this.send({ type: "hello" });
   }
 
-  notifyPuppetVisible(leftVisible: boolean, rightVisible: boolean) {
-    if (
-      leftVisible === this.puppetState.leftVisible &&
-      rightVisible === this.puppetState.rightVisible
-    ) {
-      return;
-    }
-    this.puppetState = { leftVisible, rightVisible };
+  notifyPuppetVisible(visible: boolean) {
+    if (visible === this.puppetState.visible) return;
+    this.puppetState = { visible };
     this.puppetStateDirty = true;
   }
 
@@ -304,7 +299,7 @@ function formatClientEvent(event: ClientEvent): string {
     case "user_speaking":
       return `user_speaking: ${event.speaking}`;
     case "puppet_state":
-      return `puppet_state: L=${event.leftVisible} R=${event.rightVisible}`;
+      return `puppet_state: visible=${event.visible}`;
     case "voice_list":
       return `voice_list: ${event.voices.length} voices`;
     case "hello":

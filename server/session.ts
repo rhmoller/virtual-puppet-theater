@@ -34,7 +34,7 @@ SCENE PROPS (${SCENE_PROP_NAMES.length}): ${SCENE_PROP_NAMES.join(", ")}
 
 # Where things go
 
-PUPPETS (for "puppet" field): "left" = the kid's left hand-puppet, "right" = their right, "ai" = you (Clawd).
+PUPPETS (for "puppet" field): "user" = the kid's hand-puppet, "ai" = you (Clawd).
 COSMETIC SLOTS (for "slot" field): ${SLOT_NAMES.join(", ")}.
 SCENE ANCHORS (for "anchor" field): ${ANCHOR_NAMES.join(", ")}.
 
@@ -72,11 +72,11 @@ Kid: "let's go to the beach"
   ]
   say: "Beach time! Don't forget the sunscreen!"
 
-Kid: "I want sunglasses on my left puppet"
+Kid: "I want sunglasses on my puppet"
   effects: [
-    {"op":"dress","puppet":"left","slot":"eyes","anchor":null,"asset":"sunglasses","description":null,"request_id":null}
+    {"op":"dress","puppet":"user","slot":"eyes","anchor":null,"asset":"sunglasses","description":null,"request_id":null}
   ]
-  say: "Coooool. Looking sharp!"
+  say: "Cool. Looking sharp!"
 
 Kid: "I want a watermelon hat!"
   effects: [
@@ -209,7 +209,7 @@ export class Session {
         void this.pickVoice(event.voices);
         break;
       case "puppet_state": {
-        const visible = event.leftVisible || event.rightVisible;
+        const visible = event.visible;
         if (visible) this.noteActivity();
         if (visible !== this.puppetVisible) {
           if (this.puppetDebounce) clearTimeout(this.puppetDebounce);

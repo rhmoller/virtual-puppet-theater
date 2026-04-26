@@ -137,7 +137,7 @@ function formatClientEvent(event: ClientEvent): string {
     case "user_speaking":
       return `user_speaking: ${event.speaking}`;
     case "puppet_state":
-      return `puppet_state: L=${event.leftVisible} R=${event.rightVisible}`;
+      return `puppet_state: visible=${event.visible}`;
     case "voice_list":
       return `voice_list: ${event.voices.length} voices`;
     case "hello":

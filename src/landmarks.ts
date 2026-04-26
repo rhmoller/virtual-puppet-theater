@@ -104,13 +104,12 @@ function drawHandLandmarks(lm: NormalizedLandmarkList, color: string) {
   }
 }
 
-export function drawLandmarks(handData: Record<HandLabel, { lm: NormalizedLandmarkList } | null>) {
+export function drawLandmarks(
+  handData: { lm: NormalizedLandmarkList; hand: HandLabel } | null,
+) {
   const w = landmarkCanvas.width;
   const h = landmarkCanvas.height;
   landmarkCtx.clearRect(0, 0, w, h);
-  for (const hand of ["Left", "Right"] as HandLabel[]) {
-    const data = handData[hand];
-    if (!data) continue;
-    drawHandLandmarks(data.lm, COLORS[hand]);
-  }
+  if (!handData) return;
+  drawHandLandmarks(handData.lm, COLORS[handData.hand]);
 }
