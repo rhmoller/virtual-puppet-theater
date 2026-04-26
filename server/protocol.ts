@@ -96,7 +96,21 @@ export type PuppetId = "user" | "ai";
 // `color` accepts either a hex string ("#ff8800" or "ff8800" — the
 // LLM-friendly form) or a packed integer (0xff8800 — convenient for
 // hand-authored catalog literals). The renderer parses both.
-export type AssetShape = "sphere" | "box" | "cone" | "cylinder" | "torus";
+export type AssetShape =
+  | "sphere"
+  | "box"
+  | "cone"
+  | "cylinder"
+  | "torus"
+  | "torus_thin"
+  | "half_sphere"
+  | "capsule"
+  | "star"
+  | "frustum"
+  | "pyramid"
+  | "wedge"
+  | "heart"
+  | "crescent";
 export type AssetColor = string | number;
 export type AssetSpec = {
   parts: Array<{
@@ -171,7 +185,22 @@ export type ServerEvent =
 // requires nullable fields, which fights enum constraints); the system
 // prompt tells the LLM the allowed values, and the server validates by
 // looking up the slot/anchor at runtime.
-const SHAPES = ["sphere", "box", "cone", "cylinder", "torus"] as const;
+const SHAPES = [
+  "sphere",
+  "box",
+  "cone",
+  "cylinder",
+  "torus",
+  "torus_thin",
+  "half_sphere",
+  "capsule",
+  "star",
+  "frustum",
+  "pyramid",
+  "wedge",
+  "heart",
+  "crescent",
+] as const;
 
 // Anthropic's structured-output schema engine doesn't support `oneOf`,
 // so the effect item is a single flat object with all possible fields
