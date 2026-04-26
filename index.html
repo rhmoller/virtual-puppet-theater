@@ -309,6 +309,35 @@
         opacity: 1;
         transform: translateY(0);
       }
+      .hud-dreaming {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: linear-gradient(135deg, rgba(63, 31, 91, 0.85), rgba(31, 18, 50, 0.85));
+        border: 1px solid #6a4a8e;
+        border-radius: 6px;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        color: #e8d8f5;
+        box-shadow: 0 0 16px rgba(150, 100, 220, 0.25);
+        animation: hud-dreaming-pulse 1.6s ease-in-out infinite;
+      }
+      .hud-dreaming[hidden] {
+        display: none;
+      }
+      .hud-dreaming-icon {
+        display: inline-block;
+        animation: hud-dreaming-spin 4s linear infinite;
+      }
+      @keyframes hud-dreaming-pulse {
+        0%, 100% { box-shadow: 0 0 12px rgba(150, 100, 220, 0.2); }
+        50% { box-shadow: 0 0 24px rgba(180, 130, 240, 0.45); }
+      }
+      @keyframes hud-dreaming-spin {
+        0%, 100% { transform: rotate(-6deg) scale(1); }
+        50% { transform: rotate(6deg) scale(1.15); }
+      }
     </style>
   </head>
   <body>

@@ -12,6 +12,9 @@ export class Hud {
   private aiDot: HTMLSpanElement;
   private banner: HTMLDivElement;
   private toasts: HTMLDivElement;
+  private dreaming: HTMLDivElement;
+  private dreamingLabel: HTMLSpanElement;
+  private dreamingCount = 0;
 
   constructor() {
     const root = document.createElement("div");
@@ -19,6 +22,10 @@ export class Hud {
     root.innerHTML = `
       <div class="hud-banner" hidden></div>
       <div class="hud-toasts"></div>
+      <div class="hud-dreaming" hidden>
+        <span class="hud-dreaming-icon">✨</span>
+        <span class="hud-dreaming-label">Building new prop…</span>
+      </div>
       <div class="hud-bar">
         <span class="hud-item"><span class="hud-dot" data-id="cam" data-status="idle"></span> CAM</span>
         <span class="hud-item"><span class="hud-dot" data-id="mic" data-status="idle"></span> MIC</span>
@@ -31,6 +38,8 @@ export class Hud {
     this.aiDot = root.querySelector('[data-id="ai"]') as HTMLSpanElement;
     this.banner = root.querySelector(".hud-banner") as HTMLDivElement;
     this.toasts = root.querySelector(".hud-toasts") as HTMLDivElement;
+    this.dreaming = root.querySelector(".hud-dreaming") as HTMLDivElement;
+    this.dreamingLabel = root.querySelector(".hud-dreaming-label") as HTMLSpanElement;
   }
 
   setCamera(s: Status, label?: string) {
@@ -51,6 +60,32 @@ export class Hud {
       this.showBanner("Reconnecting to AI…");
     } else {
       this.showBanner("AI disconnected — reconnecting…");
+    }
+  }
+
+  /** Increment the in-flight asset-generation count and show the
+   *  dreaming chip. Pair with endDreaming() per request. */
+  startDreaming() {
+    this.dreamingCount += 1;
+    this.renderDreaming();
+  }
+
+  /** Decrement the count; hides the chip when it reaches 0. Idempotent
+   *  at zero so a stray endDreaming() can't drive the count negative. */
+  endDreaming() {
+    this.dreamingCount = Math.max(0, this.dreamingCount - 1);
+    this.renderDreaming();
+  }
+
+  private renderDreaming() {
+    if (this.dreamingCount === 0) {
+      this.dreaming.hidden = true;
+    } else {
+      this.dreaming.hidden = false;
+      this.dreamingLabel.textContent =
+        this.dreamingCount > 1
+          ? `Building new props ×${this.dreamingCount}…`
+          : "Building new prop…";
     }
   }
 

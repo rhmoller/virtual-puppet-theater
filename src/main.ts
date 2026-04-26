@@ -308,11 +308,20 @@ showLanding().then(async ({ stream, userPickedVoiceURI, brainSize }) => {
       aiController.applyAction(action);
       if (action.effects && action.effects.length > 0) {
         sceneController.applyEffects(action.effects);
+        // Each request_* effect kicks off a parallel asset-design call
+        // — show a "dreaming" chip in the HUD until the matching
+        // asset_ready arrives.
+        for (const e of action.effects) {
+          if (e.op === "request_cosmetic" || e.op === "request_prop") {
+            hud.startDreaming();
+          }
+        }
       }
     },
     onCancelSpeech: cancelSpeech,
     onAssetReady: (request_id, asset_name, spec) => {
       sceneController.registerGenerated(request_id, asset_name, spec);
+      hud.endDreaming();
     },
     onVoicePick: (uri) => {
       if (userVoiceLocked) return;
