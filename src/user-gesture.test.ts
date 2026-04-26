@@ -99,16 +99,16 @@ describe("GestureDetector — static gesture rising-edge + cooldown", () => {
 
   it("re-emits a gesture after the cooldown elapses and the pose is re-entered", () => {
     const d = new GestureDetector();
-    // Show thumbs_up, then fist (resets prevStatic), then thumbs_up again
-    // after the cooldown.
+    // Show thumbs_up (must hold ≥0.25s to emit), then fist long enough
+    // to clear the 2.5s same-gesture cooldown, then thumbs_up again.
     const tick = (world: LandmarkList, dt: number) =>
       d.observe({ lm: makeLm(0.5, 0.5), world, mouthOpen: 0.2, roll: 0, dt });
-    tick(WORLD_THUMBS_UP, 1 / 30);
+    for (let i = 0; i < 10; i++) tick(WORLD_THUMBS_UP, 1 / 30);
     expect(d.drainGestures()).toContain("thumbs_up");
-    // Hold fist for 1.2s — past the 1.0s cooldown.
-    for (let i = 0; i < 36; i++) tick(WORLD_FIST, 1 / 30);
-    d.drainGestures(); // discard the fist emit
-    tick(WORLD_THUMBS_UP, 1 / 30);
+    // Hold fist for 3s — past the 2.5s cooldown.
+    for (let i = 0; i < 90; i++) tick(WORLD_FIST, 1 / 30);
+    d.drainGestures(); // discard fist emission
+    for (let i = 0; i < 10; i++) tick(WORLD_THUMBS_UP, 1 / 30);
     expect(d.drainGestures()).toContain("thumbs_up");
   });
 });
@@ -145,10 +145,13 @@ describe("GestureDetector — jump", () => {
   it("emits jump on a fast up-then-down palm motion", () => {
     const d = new GestureDetector();
     const dt = 1 / 30;
-    // Baseline at y=0.6 for 5 frames.
-    for (let i = 0; i < 5; i++) {
+    // Baseline long enough that the open_palm static emission (after the
+    // 0.25s hold) and the global cooldown have both cleared before the
+    // jump attempts to emit.
+    for (let i = 0; i < 30; i++) {
       d.observe({ lm: makeLm(0.5, 0.6), world: WORLD_OPEN, mouthOpen: 0, roll: 0, dt });
     }
+    d.drainGestures();
     // Up over 4 frames (~133ms), travelling y from 0.6 → 0.3 (negative dy = up).
     for (let i = 1; i <= 4; i++) {
       const y = 0.6 - (0.3 * i) / 4;

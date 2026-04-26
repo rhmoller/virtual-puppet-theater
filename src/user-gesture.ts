@@ -19,7 +19,9 @@ export type ObserveInput = {
 };
 
 // --- Tunables --------------------------------------------------------
-const COOLDOWN_S = 1.0;            // min interval between same-gesture emissions
+const COOLDOWN_S = 2.5;            // min interval between same-gesture emissions
+const GLOBAL_COOLDOWN_S = 0.6;     // min interval between any two gesture emissions
+const STATIC_HOLD_S = 0.25;        // static gesture must be stable this long before emit
 const WAVE_WINDOW_S = 1.5;
 const WAVE_MIN_CROSSINGS = 3;
 const WAVE_MIN_AMPLITUDE = 0.05;   // image-space x units (palm.x ∈ [0,1])
@@ -43,8 +45,11 @@ const ROLL_UPSIDE_TOLERANCE = 0.4; // ±0.4 rad of ±π
 export class GestureDetector {
   private buffer: UserGesture[] = [];
   private lastEmit: Partial<Record<UserGesture, number>> = {};
+  private lastAnyEmit = -Infinity;
   private palmHistory: { t: number; x: number; y: number }[] = [];
-  private prevStatic: UserGesture | null = null;
+  private staticCandidate: UserGesture | null = null;
+  private staticHoldT = 0;
+  private staticEmitted = false;
   private currentPose: UserPose = "normal";
   private poseCandidate: UserPose = "normal";
   private poseHoldT = 0;
@@ -70,12 +75,19 @@ export class GestureDetector {
       this.motionEMA += (mag - this.motionEMA) * (1 - Math.exp(-input.dt / 0.3));
     }
 
-    // Static gesture: rising edge from finger-extension classifier.
+    // Static gesture: emit only after the same classification has held for
+    // STATIC_HOLD_S, to suppress flicker around finger-extension thresholds.
     const staticG = classifyStatic(computeExtensions(input.world));
-    if (staticG !== null && staticG !== this.prevStatic) {
-      this.tryEmit(staticG);
+    if (staticG !== this.staticCandidate) {
+      this.staticCandidate = staticG;
+      this.staticHoldT = 0;
+      this.staticEmitted = false;
+    } else if (staticG !== null) {
+      this.staticHoldT += input.dt;
+      if (!this.staticEmitted && this.staticHoldT >= STATIC_HOLD_S) {
+        if (this.tryEmit(staticG)) this.staticEmitted = true;
+      }
     }
-    this.prevStatic = staticG;
 
     // Dynamic gestures: window scans.
     if (this.detectWave()) this.tryEmit("wave");
@@ -91,7 +103,9 @@ export class GestureDetector {
     this.clock += dt;
     this.hasHand = false;
     this.motionEMA *= Math.exp(-dt / 0.3);
-    this.prevStatic = null;
+    this.staticCandidate = null;
+    this.staticHoldT = 0;
+    this.staticEmitted = false;
     // Sleeping doesn't apply when the hand isn't even visible — pose
     // resets to normal so we don't carry stale state across reappearance.
     if (this.currentPose !== "normal") {
@@ -125,11 +139,14 @@ export class GestureDetector {
     return "low";
   }
 
-  private tryEmit(g: UserGesture): void {
+  private tryEmit(g: UserGesture): boolean {
     const last = this.lastEmit[g] ?? -Infinity;
-    if (this.clock - last < COOLDOWN_S) return;
+    if (this.clock - last < COOLDOWN_S) return false;
+    if (this.clock - this.lastAnyEmit < GLOBAL_COOLDOWN_S) return false;
     this.buffer.push(g);
     this.lastEmit[g] = this.clock;
+    this.lastAnyEmit = this.clock;
+    return true;
   }
 
   private recentEmissions(windowS: number): UserGesture[] {
