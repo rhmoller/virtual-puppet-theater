@@ -1,9 +1,9 @@
-// src/speech.ts — Clawd's TTS. Picks an English-leaning male-ish voice,
-// queues utterances that arrive before (a) the autoplay-policy unlock
-// and (b) the async voice list has populated, and flushes the queue
-// on the first user gesture once both are ready. Also serializes
-// sequential replies so a new utterance waits for the current one to
-// finish instead of cutting it off mid-sentence.
+// src/speech.ts — Clawd's TTS. Primary path streams MP3 from the server's
+// /tts endpoint (ElevenLabs); browser speechSynthesis is the fallback if
+// /tts errors. Queues utterances that arrive before the autoplay-policy
+// unlock, then flushes on the first user gesture. Serializes sequential
+// replies so a new utterance waits for the current one to finish instead
+// of cutting it off mid-sentence.
 
 // voiceURI chosen by the server via Claude. Null until the server picks
 // (or if the pick failed / returned no suitable voice). When null we fall
@@ -85,6 +85,13 @@ const pendingSpeech: string[] = [];
 const utteranceQueue: string[] = [];
 let playing = false;
 
+// ElevenLabs path state. `currentAudio` is the in-flight HTMLAudioElement
+// so cancelSpeech() can stop it. `elevenAvailable` flips false after the
+// first /tts failure to avoid hammering a broken endpoint for the rest
+// of the session — subsequent utterances go straight to the browser path.
+let currentAudio: HTMLAudioElement | null = null;
+let elevenAvailable = true;
+
 // Speaking-burst callback: fires once when Clawd starts talking and once
 // when the burst drains (queue empty, nothing in flight). Used by Clawd's
 // lip-sync animation so it covers the whole burst, not just one utterance.
@@ -131,10 +138,66 @@ function playNextUtterance() {
   if (playing) return;
   const text = utteranceQueue.shift();
   if (!text) return;
+  playing = true;
   speakNow(text);
 }
 
-function speakNow(text: string, retry = true) {
+function speakNow(text: string) {
+  if (elevenAvailable) {
+    void speakNowEleven(text);
+  } else {
+    speakNowBrowser(text);
+  }
+}
+
+async function speakNowEleven(text: string) {
+  let url: string | null = null;
+  try {
+    const res = await fetch("/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(`tts http ${res.status}`);
+    const blob = await res.blob();
+    url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    console.log("[tts] eleven speak", { text, length: text.length });
+    const cleanup = () => {
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+      currentAudio = null;
+    };
+    audio.onplay = () => {
+      console.log("[tts] eleven onplay", { text });
+      startBurst();
+    };
+    audio.onended = () => {
+      console.log("[tts] eleven onended", { text });
+      cleanup();
+      playing = false;
+      if (utteranceQueue.length === 0) endBurst();
+      playNextUtterance();
+    };
+    audio.onerror = () => {
+      console.warn("[tts] eleven audio error", { text });
+      cleanup();
+      playing = false;
+      if (utteranceQueue.length === 0) endBurst();
+      playNextUtterance();
+    };
+    await audio.play();
+  } catch (err) {
+    console.warn("[tts] eleven failed, falling back to browser TTS:", err);
+    if (url) URL.revokeObjectURL(url);
+    currentAudio = null;
+    elevenAvailable = false;
+    speakNowBrowser(text);
+  }
+}
+
+function speakNowBrowser(text: string, retry = true) {
   const synth = window.speechSynthesis;
   if (!synth || !text) {
     console.warn("[tts] skip", { hasSynth: !!synth, text });
@@ -197,8 +260,11 @@ function speakNow(text: string, retry = true) {
 }
 
 export function speak(text: string) {
-  if (!speechUnlocked || !voicesReady) {
-    console.log("[tts] queued:", text, { speechUnlocked, voicesReady });
+  // ElevenLabs path doesn't need browser voices; only the autoplay
+  // gesture-unlock gate matters. Browser fallback's existing retry
+  // handles the case where voices haven't loaded yet on its own.
+  if (!speechUnlocked) {
+    console.log("[tts] queued:", text, { speechUnlocked });
     pendingSpeech.push(text);
     return;
   }
@@ -209,6 +275,11 @@ export function cancelSpeech() {
   utteranceQueue.length = 0;
   playing = false;
   endBurst();
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
+  }
   window.speechSynthesis?.cancel();
 }
 
@@ -217,7 +288,7 @@ export function installSpeechUnlock() {
     if (speechUnlocked) return;
     speechUnlocked = true;
     setTimeout(() => {
-      if (voicesReady) flushPendingSpeech();
+      flushPendingSpeech();
     }, 50);
   };
   window.addEventListener("pointerdown", unlock, { capture: true });
