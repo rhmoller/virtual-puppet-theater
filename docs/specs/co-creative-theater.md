@@ -104,7 +104,7 @@ Cut order: drop Tier 3, then drop scene props down to 6, then drop the `neck` sl
 
 ## Demo narrative (3-min hard cap)
 
-1. **Open** — kid raises two puppets, Claude greets them. Establishes the basic interaction.
+1. **Open** — kid raises a hand, the user puppet appears, Claude greets them. Establishes the basic interaction.
 2. **Catalog dressing** — "give the puppet a crown" → instant; "I want sunglasses" → on the user's puppet.
 3. **Scene placement** — "let's go to the beach" → sun + sand_castle + beach_ball appear.
 4. **The money shot** — "I want a watermelon hat!" → the AI puppet: "Ooh, let me dream that up!" → ~5s later it pops on. Closing tagline: *"an interface for play that didn't exist a year ago."*
