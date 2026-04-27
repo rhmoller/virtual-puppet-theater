@@ -192,6 +192,34 @@ const GESTURES: Record<Gesture, GestureSpec | null> = {
       root.rotation.z += Math.sin(t * Math.PI * 2 * 3.0) * 0.2 * env;
     },
   },
+  // Both arms rise into a "ta-da!" pose. Mirror of `wave` applied to both
+  // shoulders. Useful for celebratory beats and for presenting items
+  // attached to hand_left / hand_right slots — held props lift above
+  // the head, drawing the eye.
+  raise_hands: {
+    duration: 1.4,
+    apply(t, { leftShoulder, rightShoulder }) {
+      const env = envelope(t, 1.4);
+      leftShoulder.rotation.z += 1.8 * env;
+      rightShoulder.rotation.z += -1.8 * env;
+    },
+  },
+  // Both arms swing forward and back in unison. Useful for showing off
+  // hand-held props with motion ("look what I've got!") — the cosmetic
+  // attached to hand_left / hand_right ragdolls along with the swing,
+  // so a flag or wand reads as actively waved.
+  swing_hands: {
+    duration: 1.4,
+    apply(t, { leftShoulder, rightShoulder }) {
+      const env = envelope(t, 1.4);
+      const swing = Math.sin(t * Math.PI * 2 * 1.8) * 0.7 * env;
+      leftShoulder.rotation.x += swing;
+      rightShoulder.rotation.x += swing;
+      // Light outward lift so hands clear the torso during the swing.
+      leftShoulder.rotation.z += -0.35 * env;
+      rightShoulder.rotation.z += 0.35 * env;
+    },
+  },
 };
 
 // Base rest rotation of the shoulder groups, set in Puppet's constructor:

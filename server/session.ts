@@ -62,6 +62,23 @@ The six ops:
   fields: puppet, slot (= channel: "skin", "shirt", or "hair"), color. Others null.
   color is a CSS color name ("red", "skyblue", "lime") or a hex string ("#ff8800"). One channel per effect — emit multiple recolor effects in the same turn for full make-overs.
 
+# Theme channels — what each channel paints
+
+Each puppet has THREE shared materials. Recolor maps body parts to channels like this:
+
+- "skin"  → face / jaw / nose / lower arms / hands (+ ears on the stage puppet)
+- "shirt" → torso, upper-arm sleeves, AND the COLLAR (the ring at the neckline)
+- "hair"  → hair cap, bangs, AND the CUFFS (the dark wrist bands)
+
+So "make my cuffs gold" → recolor hair on user. "Change the collar to red" → recolor shirt. There is no separate channel for collar, cuffs, eyes, or skin freckles — those are bucketed as above.
+
+Stock palette (when no override is on the [scene: ...colors{...}] line, these are the current colors):
+
+- user puppet:  skin = peachy/light tan, shirt = warm orange, hair = dark brown
+- ai puppet (you): skin = pale lavender, shirt = mustard yellow, hair = teal green
+
+Use these defaults when the kid asks "what color is your shirt?" or "what do I look like?" — answer in plain words, no hex codes.
+
 # Worked examples (full flat shape — copy this style)
 
 Kid: "give the puppet a crown"
@@ -114,6 +131,15 @@ Kid: "give yourself green skin and pink hair"
     {"op":"recolor","puppet":"ai","slot":"hair","anchor":null,"asset":null,"description":null,"request_id":null,"color":"hotpink"}
   ]
   say: "Whoa, fresh look! How do I look?"
+
+# Picking the gesture
+
+Most gestures (wave, nod, shake, jump, spin, wiggle, shrug, lean_in) are general embodiment. Two are special:
+
+- "raise_hands" — both arms go up like a "ta-da!". Use this when you've just placed something cool on your hand_left / hand_right slot and want to show it off above your head, or for celebratory reveals.
+- "swing_hands" — both arms swing forward and back in unison. Use when you're holding a prop on hand_left / hand_right and want to wave it around — flags, wands, anything you'd naturally swing. The held item ragdolls along with the swing, so it reads as actively waved.
+
+So if you dressed yourself with a wand on hand_right, follow up with gesture="swing_hands" rather than gesture="wave".
 
 # Rules
 
@@ -179,7 +205,7 @@ export class Session {
   // still trigger the stage note.
   private hasReactedToFirstAppearance = false;
 
-  private budget = new CallBudget();
+  private budget: CallBudget;
   // Avoid spamming rate-limit error events when many requests trip the
   // limit in quick succession; emit at most one every few seconds.
   private lastBudgetErrorAt = 0;
@@ -201,7 +227,9 @@ export class Session {
     private send: (event: ServerEvent) => void,
     private global: GlobalCeiling,
     private assetGenerator: AssetGenerator,
+    budget: CallBudget = new CallBudget(),
   ) {
+    this.budget = budget;
     this.scheduleIdleCheck();
     // Fire an opening line so the puppet greets the user.
     this.prompt(

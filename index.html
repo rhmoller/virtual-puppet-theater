@@ -258,6 +258,8 @@
         gap: 6px;
         pointer-events: none;
         font-family: ui-sans-serif, system-ui, sans-serif;
+        transform: scale(2);
+        transform-origin: bottom right;
       }
       .hud-bar {
         display: flex;
@@ -330,6 +332,46 @@
         opacity: 1;
         transform: translateY(0);
       }
+      .hud-stt {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: rgba(10, 9, 14, 0.7);
+        border: 1px solid #2a2731;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #b8a48a;
+        backdrop-filter: blur(6px);
+        max-width: 360px;
+      }
+      .hud-stt[data-state="listening"] { border-color: #3a5a4f; }
+      .hud-stt[data-state="hearing"] {
+        border-color: #7fb3a0;
+        box-shadow: 0 0 10px rgba(127, 179, 160, 0.3);
+      }
+      .hud-stt[data-state="denied"],
+      .hud-stt[data-state="error"],
+      .hud-stt[data-state="unsupported"] {
+        border-color: #6a3a32;
+        color: #d8a89a;
+      }
+      .hud-stt-status {
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-size: 10px;
+        white-space: nowrap;
+      }
+      .hud-stt-text {
+        color: #e8e3d8;
+        font-style: italic;
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .hud-stt-text[data-final="true"] { font-style: normal; color: #f5ead4; }
+      .hud-stt-text[hidden] { display: none; }
       .hud-dreaming {
         display: inline-flex;
         align-items: center;

@@ -6,6 +6,7 @@ import { synthesize } from "./tts.ts";
 import {
   IpConnectionCounter,
   GlobalCeiling,
+  CallBudget,
   clientIpFrom,
   originAllowed,
 } from "./limits.ts";
@@ -157,8 +158,19 @@ const server = Bun.serve<SocketData, string>({
         ws.send(JSON.stringify(event));
       };
       const llm = new AnthropicBackend(MODEL_FOR_BRAIN[ws.data.brain]);
-      ws.data.session = new Session(llm, send, globalCeiling, assetGenerator);
-      console.log(`[ws] open (brain=${ws.data.brain}, model=${llm.name})`);
+      // Local dev (clientIpFrom returned the "local" fallback because
+      // no Fly / x-forwarded-for headers were present) bypasses the
+      // per-session rate gate. The lifetime cap and global daily cap
+      // still apply, so the kill-switch is intact. Production traffic
+      // sees the standard 8/min cap.
+      const isLocal = ws.data.ip === "local";
+      const budget = isLocal
+        ? new CallBudget(1_000_000, 60_000, 1_000_000)
+        : new CallBudget();
+      ws.data.session = new Session(llm, send, globalCeiling, assetGenerator, budget);
+      console.log(
+        `[ws] open (brain=${ws.data.brain}, model=${llm.name}${isLocal ? ", local: budget bypassed" : ""})`,
+      );
     },
     message(ws, raw) {
       let event: ClientEvent;

@@ -18,6 +18,7 @@ type Handlers = {
   onMicState?: (state: MicState) => void;
   onAiThinking?: (thinking: boolean) => void;
   onServerError?: (message: string) => void;
+  onTranscript?: (text: string, final: boolean) => void;
 };
 
 export class Brain {
@@ -275,6 +276,7 @@ export class Brain {
       console.log(`[stt] promote partial → final: "${text}"`);
       this.send({ type: "transcript", text, final: true });
       this.handlers.onAiThinking?.(true);
+      this.handlers.onTranscript?.(text, true);
     };
 
     rec.onresult = (ev) => {
@@ -301,6 +303,7 @@ export class Brain {
           if (!partialPromoted) {
             this.send({ type: "transcript", text, final: true });
             this.handlers.onAiThinking?.(true);
+            this.handlers.onTranscript?.(trimmed, true);
           }
           // The browser's final landed after our speculative promote;
           // discard it to avoid a duplicate turn.
@@ -317,6 +320,7 @@ export class Brain {
         // duplicate cancel_speech events.
         if (partialPromoted) continue;
         this.send({ type: "user_speaking", speaking: true });
+        this.handlers.onTranscript?.(trimmed, false);
 
         if (trimmed !== lastPartialText) {
           lastPartialText = trimmed;

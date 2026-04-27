@@ -14,7 +14,9 @@ export type Gesture =
   | "shake"
   | "jump"
   | "spin"
-  | "wiggle";
+  | "wiggle"
+  | "raise_hands"
+  | "swing_hands";
 
 export type Action = {
   say?: string;
@@ -290,6 +292,8 @@ export const ACTION_JSON_SCHEMA = {
           "jump",
           "spin",
           "wiggle",
+          "raise_hands",
+          "swing_hands",
         ],
       },
       effects: {

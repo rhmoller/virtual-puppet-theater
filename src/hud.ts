@@ -5,6 +5,7 @@
 export type Status = "idle" | "ok" | "warn" | "err";
 export type AiState = "idle" | "thinking" | "speaking";
 export type ConnState = "connected" | "reconnecting" | "disconnected";
+export type SttState = "idle" | "listening" | "hearing" | "denied" | "unsupported" | "error";
 
 export class Hud {
   private camDot: HTMLSpanElement;
@@ -15,6 +16,10 @@ export class Hud {
   private dreaming: HTMLDivElement;
   private dreamingLabel: HTMLSpanElement;
   private dreamingCount = 0;
+  private stt: HTMLDivElement;
+  private sttStatus: HTMLSpanElement;
+  private sttText: HTMLSpanElement;
+  private transcriptHideTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     const root = document.createElement("div");
@@ -22,6 +27,10 @@ export class Hud {
     root.innerHTML = `
       <div class="hud-banner" hidden></div>
       <div class="hud-toasts"></div>
+      <div class="hud-stt" data-state="idle">
+        <span class="hud-stt-status">STT idle</span>
+        <span class="hud-stt-text" hidden></span>
+      </div>
       <div class="hud-dreaming" hidden>
         <span class="hud-dreaming-icon">✨</span>
         <span class="hud-dreaming-label">Building new prop…</span>
@@ -40,6 +49,49 @@ export class Hud {
     this.toasts = root.querySelector(".hud-toasts") as HTMLDivElement;
     this.dreaming = root.querySelector(".hud-dreaming") as HTMLDivElement;
     this.dreamingLabel = root.querySelector(".hud-dreaming-label") as HTMLSpanElement;
+    this.stt = root.querySelector(".hud-stt") as HTMLDivElement;
+    this.sttStatus = root.querySelector(".hud-stt-status") as HTMLSpanElement;
+    this.sttText = root.querySelector(".hud-stt-text") as HTMLSpanElement;
+  }
+
+  setStt(state: SttState, detail?: string) {
+    this.stt.dataset.state = state;
+    const labels: Record<SttState, string> = {
+      idle: "STT idle",
+      listening: "STT listening",
+      hearing: "STT hearing",
+      denied: "STT blocked",
+      unsupported: "STT unsupported",
+      error: "STT error",
+    };
+    this.sttStatus.textContent = detail ?? labels[state];
+  }
+
+  /** Show the live (or final) transcript next to the STT status.
+   *  Final transcripts auto-fade after a short delay; partials persist
+   *  until replaced or cleared. Empty text clears the chip immediately. */
+  setTranscript(text: string, final: boolean) {
+    if (this.transcriptHideTimer !== null) {
+      clearTimeout(this.transcriptHideTimer);
+      this.transcriptHideTimer = null;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) {
+      this.sttText.hidden = true;
+      this.sttText.textContent = "";
+      this.sttText.dataset.final = "false";
+      return;
+    }
+    this.sttText.hidden = false;
+    this.sttText.textContent = trimmed;
+    this.sttText.dataset.final = String(final);
+    if (final) {
+      this.transcriptHideTimer = setTimeout(() => {
+        this.sttText.hidden = true;
+        this.sttText.textContent = "";
+        this.transcriptHideTimer = null;
+      }, 4000);
+    }
   }
 
   setCamera(s: Status, label?: string) {

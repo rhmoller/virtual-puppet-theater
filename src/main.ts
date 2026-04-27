@@ -341,10 +341,23 @@ showLanding().then(async ({ stream, userPickedVoiceURI, brainSize }) => {
     },
     onConnection: (state) => hud.setConnection(state),
     onMicState: (state) => {
-      if (state === "listening") hud.setMic("ok", "Microphone listening");
-      else if (state === "denied") hud.setMic("err", "Microphone blocked — enable it in your browser");
-      else if (state === "unsupported") hud.setMic("err", "Speech input needs Chrome or Edge");
-      else hud.setMic("err", "Microphone error");
+      if (state === "listening") {
+        hud.setMic("ok", "Microphone listening");
+        hud.setStt("listening");
+      } else if (state === "denied") {
+        hud.setMic("err", "Microphone blocked — enable it in your browser");
+        hud.setStt("denied", "STT blocked — enable mic");
+      } else if (state === "unsupported") {
+        hud.setMic("err", "Speech input needs Chrome or Edge");
+        hud.setStt("unsupported", "STT unsupported");
+      } else {
+        hud.setMic("err", "Microphone error");
+        hud.setStt("error");
+      }
+    },
+    onTranscript: (text, final) => {
+      hud.setStt(final ? "listening" : "hearing");
+      hud.setTranscript(text, final);
     },
     onAiThinking: (thinking) => {
       if (thinking) hud.setAi("thinking");
