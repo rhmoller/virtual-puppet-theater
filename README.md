@@ -7,6 +7,10 @@ Claude Opus 4.7.
 
 Built for the "Built with Opus" hackathon.
 
+> **Note:** The [`hackathon-release`](../../tree/hackathon-release) branch
+> preserves the exact code submitted to the hackathon. `main` has since
+> received minor improvements and cleanups made after the deadline.
+
 ## Stack
 
 - **Bun** — runtime and package manager
