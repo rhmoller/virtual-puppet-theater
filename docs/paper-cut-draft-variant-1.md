@@ -8,8 +8,14 @@ only the framing, voice, and beat ownership shift.
 
 ## Constraints and decisions
 
-- **Length:** 2:30 hard target (the brief allows up to 3:00, but a
-  tight 2:30 likely scores better).
+- **Length:** 2:55 target (the brief allows up to 3:00). 1:54 of
+  recorded demo footage covers cold-open through money-shot plus a
+  bonus dance-with-hats victory shot. The remaining ~1 minute is a
+  thesis statement plus a "things we didn't cover" enumeration that
+  surfaces the architecture (STT, TTS, premade vs Opus-generated
+  props, the two-agent split). The earlier recolor and cache-flex
+  beats are cut — neither was recorded, and the tech enumeration
+  pulls the same architectural weight more honestly.
 - **Framing:** "I built a co-creative interface for live play. Here's
   what it does." Quietly proud maker showing their thing. Not a kids'
   product pitch.
@@ -18,9 +24,13 @@ only the framing, voice, and beat ownership shift.
   that feel alive — not on emotional kid reactions. Aligns with the
   *Most Creative Opus 4.7* rubric, which rewards projects "with a
   voice."
-- **Audio:** scripted voiceover (you) + in-app audio (the puppet's
-  ElevenLabs flash voice + your live STT) ducked underneath. Music
-  bed sparse, deliberate silences allowed.
+- **Audio:** speech only. Scripted voiceover (you) + in-app audio
+  (the puppet's ElevenLabs flash voice + your live on-stage requests
+  via STT). No music bed, no sound effects. Silence between speech
+  is fine — and given the maker-driven register, deliberate silence
+  reads as confident, not empty. Mix discipline matters more without
+  a bed: VO close-mic'd and tight, on-stage voice mid-volume and
+  loose, in-app puppet audio sits between them.
 - **On camera:** no webcam feed except one short hands-only insert
   that establishes MediaPipe input. No faces shown.
 - **Voices on stage:** single narrator (you) throughout. Mic-on-stand
@@ -48,50 +58,85 @@ only the framing, voice, and beat ownership shift.
 |----|----------------------------|---------------|--------------|
 | 1  | Cold open / sizzle         | 00:00–00:10   | edited cuts  |
 | 2  | Title card                 | 00:10–00:14   | —            |
-| 3  | Hands-only establishing    | 00:14–00:18   | —            |
-| 4  | Setup + naming             | 00:18–00:38   | live + VO    |
-| 5  | Catalog dressing           | 00:38–00:55   | live + VO    |
-| 6  | Scene placement            | 00:55–01:12   | live + VO    |
-| 7  | Money shot                 | 01:12–01:55   | live + VO    |
-| 8  | Recolor flourish           | 01:55–02:10   | live + VO    |
-| 9  | Cache flex                 | 02:10–02:25   | live + VO    |
-| 10 | Close + end card           | 02:25–02:30   | —            |
+| 3  | Hands-only establishing    | 00:14–00:28   | live + VO    |
+| 4  | Setup + naming             | 00:28–00:48   | live + VO    |
+| 5  | Catalog dressing           | 00:48–01:05   | live + VO    |
+| 6  | Scene placement            | 01:05–01:22   | live + VO    |
+| 7  | Dance                      | 01:22–01:34   | live + VO    |
+| 8  | Money shot                 | 01:34–02:17   | live + VO    |
+| 9  | Thesis                     | 01:54–02:04   | VO over hold |
+| 10 | Things we didn't cover     | 02:04–02:46   | VO + visuals |
+| 11 | Close + end card           | 02:46–02:55   | live + VO    |
 
-A new beat 8 (recolor) replaces what was previously a longer kid-driven
-money-shot tail. It's a 15-second beat that shows off the voice-driven
-recolor op (just landed today), and it's a satisfying visual change
-that's cheap to record cleanly without a kid.
+Beats 9–10 are voiceover-only "what's under the hood" content laid
+over diagrams and harvested screen captures. The earlier recolor and
+cache-flex beats were cut when the recording session ran clean enough
+without them — the architecture-enumeration approach pulls the same
+weight, more honestly, and uses the dance-with-hats victory shot as
+the closing hold.
 
 ## Beat-by-beat with VO
 
-VO speaking rate target: ~140 wpm (2.3 words/sec). `[NAME]` = the
-in-session name you pick. `[PROP]` = your chosen money-shot prop.
+VO speaking rate target: ~140 wpm (2.3 words/sec). The puppet's name
+is **Bob**; the money-shot prop is the **ice cream hat**.
 
 ```
-00:00–00:10  COLD OPEN                                   (no VO)
-  Music + sizzle. Quick cuts:
-   • [PROP] materializing on the AI puppet
+00:00–00:10  COLD OPEN                                   (silent visuals + audio peeks)
+  No music, no SFX. Quick cuts of the most visually arresting
+  moments:
+   • ice cream hat materializing on Bob
    • beach scene snapping into place
    • cosmetics landing on the user puppet
-   • puppet answering with the name [NAME] (audio peek)
+   • Bob answering with his name (in-app audio peek — just the
+     puppet's voice, no VO over it)
    • a recolor flash (e.g. shirt going from mustard → blue)
-  Optional: a quiet exhale or single "huh" reaction laid over the
-  materialization shot. No kid-laughter audio (we don't have it).
+  Without a music bed the cuts must carry on visual rhythm alone.
+  Tighter cuts (0.8–1.2s each) and one short audio peek of Bob
+  saying his name anchor the scene — that single line tells the
+  viewer this is a thing that talks back, before the title card
+  lands.
 
 00:10–00:14  TITLE CARD                                  (no VO)
   Project name only. ~3s held. Save the tagline for the close.
 
-00:14–00:18  HANDS-ONLY ESTABLISHING                     (no VO)
-  Hand rises into frame, MediaPipe landmark overlay visible.
-  Anchors the technical claim. Cut to the puppet coming alive
-  on stage.
+00:14–00:28  HANDS-ONLY ESTABLISHING                     (~14s, VO over)
+  Single continuous take. The hand moves as if controlling a puppet
+  throughout — same gestures, same motion arc, only the visual
+  interpretation changes as you press D to cycle the four debug
+  modes. The cumulative effect is "oh, that's the same hand, and
+  here's what the system sees at each stage."
 
-00:18–00:38  SETUP + NAMING                              (~10s VO, split)
+  ── Mode 1: camera (raw webcam, ~2.5s) ──
+  Hand rises into frame, moving expressively.
+  VO: "In the virtual puppet theater,"
+
+  ── Mode 2: camera-markers (~4s) ──
+  MediaPipe landmark overlay snaps onto the hand. Same motion
+  continues underneath, now annotated with skeleton points.
+  VO: "a webcam feed is analyzed by MediaPipe, which tracks
+       hand landmarks and estimates their 3D positions."
+
+  ── Mode 3: camera-puppet (~3.5s) ──
+  Webcam still visible; rigged puppet now drives off the same
+  motion, no theater behind it. The hand→puppet correspondence
+  reads instantly because the gesture is unchanged.
+  VO: "Those drive a rigged puppet —"
+
+  ── Mode 4: normal (~4s, transitions into beat 4) ──
+  Theater fades in around the puppet; AI puppet visible on stage.
+  Webcam disappears. The user puppet is now in the world.
+  VO: "who walks on stage to meet Claude's AI puppet."
+
+  (34 words / ~14s at 140 wpm. Continuous hand motion across all
+  four cuts is the load-bearing visual — do not cut to a separate
+  take per mode.)
+
+00:28–00:48  SETUP + NAMING                              (~10s VO, split)
   AI puppet (in-app):
     "Hi friend! I'm a puppet — but I don't have a name yet.
      What should it be?"
-  Maker (on-stage voice): "Let's call you [NAME]."
-  AI puppet: "[NAME]! I love it. Hi, I'm [NAME]!"
+  Maker (on-stage voice): "Let's call you Bob."
+  AI puppet: "Bob! I love it. Hi, I'm Bob!"
 
   ── VO underneath the exchange ──
   VO: "A hand-puppet on the webcam, another on stage played
@@ -99,15 +144,15 @@ in-session name you pick. `[PROP]` = your chosen money-shot prop.
        give it one."
   (24 words / ~10s, ducked under the in-app dialogue)
 
-00:38–00:55  CATALOG DRESSING                            (~6s VO)
-  Maker: "Give [NAME] a crown."        → crown.
+00:48–01:05  CATALOG DRESSING                            (~6s VO)
+  Maker: "Give Bob a crown."           → crown.
   Maker: "I want sunglasses."          → sunglasses on user puppet.
   VO (low, over the second request):
        "Claude can dress the puppets and place props from a
         small built-in catalog."
   (15 words / ~6s)
 
-00:55–01:12  SCENE PLACEMENT                             (~5s VO)
+01:05–01:22  SCENE PLACEMENT                             (~5s VO)
   Maker: "Let's go to the beach."
   Sun + sand castle + beach ball materialize at named anchors.
   VO (after the props land):
@@ -115,14 +160,24 @@ in-session name you pick. `[PROP]` = your chosen money-shot prop.
         maximalist imagination."
   (11 words / ~5s)
 
-01:12–01:55  MONEY SHOT                                  (~14s VO, split)
-  Maker: "I want a [PROP]."
+01:22–01:34  DANCE                                       (~7s VO)
+  Maker: "Bob, let's dance!"
+  Bob plays a dance animation/audio. Maker's hand moves
+  expressively on the webcam — user puppet sways with it,
+  Bob mirrors and embellishes.
+  VO (over the dance):
+       "Body language from the webcam flows live to the
+        model. Bob picks up the cue and dances back."
+  (17 words / ~7s)
+
+01:34–02:17  MONEY SHOT                                  (~14s VO, split)
+  Maker: "I want an ice cream hat."
   AI puppet: "Ooh, let me dream that up!"
   HUD dreaming chip pulses.
 
   ── VO Phase A, over the dreaming chip (~7s, light speed-ramp) ──
-  VO: "While [NAME] stalls out loud, a separate Opus 4.7
-       call is composing geometry from a handful of three.js
+  VO: "While Bob stalls out loud, a separate Opus 4.7 call
+       is composing geometry from a handful of three.js
        primitives."
   (19 words / ~7s)
 
@@ -130,8 +185,8 @@ in-session name you pick. `[PROP]` = your chosen money-shot prop.
 
   ── VO Phase B, over the fade-in (~6s) ──
   VO: "The asset designer runs in parallel — it's always
-       Opus, even when [NAME] is on Haiku."
-  (15 words / ~6s)
+       Opus, even when Bob is on Haiku."
+  (14 words / ~6s)
 
   ── No VO over the puppet's reaction. Let the moment breathe. ──
 
@@ -139,31 +194,67 @@ in-session name you pick. `[PROP]` = your chosen money-shot prop.
   Maker: "And a [SECOND_PROP]." → second materialization.
   Reads as confidence in the system, not a one-shot trick.
 
-01:55–02:10  RECOLOR FLOURISH                            (~5s VO)
-  Maker: "Make your shirt blue. And give yourself green hair."
-  Both recolors land in one turn (the LLM fans the request into
-  two recolor effects).
-  VO (over the change):
-       "Voice-controlled recolor. The puppet's whole palette
-        is one Opus call away."
-  (14 words / ~6s)
+01:54–02:04  THESIS                                      (~11s VO)
+  Visual: dance-with-hats footage holds, slightly slowed.
+  VO: "This was an exploration of using Opus 4.7 for playful,
+       creative interaction — a small world a kid or playful
+       adult can shape by talking to it."
+  (26 words / ~11s)
 
-02:10–02:25  CACHE FLEX                                  (~5s VO)
-  Maker: "I want another [PROP]." — instant pop-in.
-  VO: "Asked again, it appears instantly from cache."
-  (8 words / ~3s)
+02:04–02:46  THINGS WE DIDN'T COVER                       (~42s VO, 4 sub-items)
+  Dissolve to a darker panel. Each sub-item gets its own visual;
+  VO reads as one continuous list.
 
-02:25–02:30  CLOSE + END CARD                            (~4s VO)
-  Final shot: both puppets (AI and user) wearing the [PROP],
-  recolored palette, full beach scene assembled — a single
-  packed frame summarizing what was made.
+  ── Bridge (~3s) ──
+  VO: "A few things we didn't get to show:"
+  (8 words)
+
+  ── Sub-item 1: STT (~9s) ──
+  Visual: STT HUD frame from the app showing the live transcript
+  chip ("STT listening" → spoken phrase appears).
+  VO: "Speech-in is the browser's Web Speech API — free, decent,
+       works in any modern Chrome."
+  (16 words)
+
+  ── Sub-item 2: TTS (~9s) ──
+  Visual: a still of Bob mid-line with an "ElevenLabs Flash" tag
+  overlaid; brief audio peek of his voice underneath.
+  VO: "Bob's voice is ElevenLabs Flash — more life and expression
+       than the browser's built-in synthesis."
+  (16 words)
+
+  ── Sub-item 3: generated props (~10s) ──
+  Visual: the ice cream hat still (puppets-with-hats.png) holds.
+  Asset-spec JSON inset on one side, an "Opus 4.7" tag on the
+  other. Catalog half is dropped — the contrast lives in the VO,
+  not the frame.
+  VO: "Some props are pre-built three.js. Others — like the
+       ice cream hat — Opus composes from primitives on the
+       fly, the first time you ask."
+  (28 words)
+
+  ── Sub-item 4: two agents (~11s) ──
+  Visual: simple diagram. Two boxes — "Bob — Haiku 4.5" and
+  "Prop builder — Opus 4.7" — sharing a cache band underneath.
+  VO: "And there are two agents under the hood, one shared
+       cache: Bob's brain runs on Haiku for fast turn-taking,
+       the prop builder runs on Opus when geometry has to be
+       invented."
+  (32 words)
+
+02:46–02:55  CLOSE + END CARD                             (~4s VO)
+  Visual: dance-with-hats footage returns. Tagline lands over it;
+  end card overlays at the tail.
   VO: "An interface for play that didn't exist a year ago."
   (10 words / ~4s)
   End card: project name + GitHub URL + "Built with Opus 4.7".
 ```
 
-**Totals.** ~106 words of VO across ~50 seconds of speech, distributed
-over 2:30. Silence and in-app audio fill the rest.
+**Totals.** ~190 words of VO across ~80 seconds of speech, distributed
+over 2:55. Silence and in-app audio fill the rest. The 1:54 of
+recorded footage carries the demo; the back ~1 minute is a thesis
+plus a four-item architecture enumeration over diagrams and harvested
+screen captures.
 
 ## Notes on individual beats
 
@@ -201,29 +292,47 @@ the chip-pulse footage rather than fake the gen latency.
 ### Recording session (single person)
 
 Lines to record cleanly (multiple takes each, pick the best):
-- "Let's call you [NAME]." (commit to one name across all takes)
-- "Give [NAME] a crown."
+
+All on-stage lines are already captured in the 1:54 of recorded
+footage:
+
+- "Let's call you Bob."
+- "Give Bob a crown."
 - "I want sunglasses."
 - "Let's go to the beach."
-- "I want a [PROP]." (the money-shot ask)
-- Optional: "And a [SECOND_PROP]."
-- "Make your shirt blue. And give yourself green hair."
-- "I want another [PROP]." (the cache flex)
+- "Bob, let's dance!"
+- "I want an ice cream hat."
+
+Still to record: the back-half VO (thesis + four "didn't cover"
+items + tagline). All voice-only, no live-action takes left.
 
 Record VO separately after the visual takes lock — VO over picture
 edits cleanly, the reverse is painful.
 
-### Hands-only insert
+### Hands-only insert (pipeline reveal)
 
-3–5 seconds, early. Frame on hand and forearm entering view, with
-the MediaPipe debug landmark overlay enabled. Cut back to the stage
-and never show the webcam feed again. Privacy preserved, technical
-claim landed. One shot does this work for the entire video.
+14 seconds, early. Single continuous hand take with the four debug
+modes (D key cycles `normal → camera → camera-markers →
+camera-puppet → normal`) cut underneath. The hand performs natural
+puppet-controlling motion throughout — small waves, pinches, a
+gentle bow — and the *only* thing that changes per cut is what the
+system overlays on or extracts from that motion. That's the visual
+proof that everything downstream is grounded in real input, not
+canned animation.
+
+Privacy preserved (no face), technical claim landed comprehensively.
+This one beat replaces what would otherwise need a 30-second
+"how it works" explainer later.
+
+Recording note: cycle the modes manually with D between takes, or
+do one long take in each mode and rely on the editor to align them
+to the same hand motion. The latter is safer — easier to land a
+crisp 3.5s rhythm in post than to nail mode-cycle timing live.
 
 ### Voice quality
 
 The in-app audio is ElevenLabs flash (George by default) — warm,
-animated, takes direction. The naming beat's "[NAME]! I love it"
+animated, takes direction. The naming beat's "Bob! I love it"
 line and the money-shot stall line carry significant weight that the
 old browser TTS couldn't deliver. Lean in: let the puppet's audio
 breathe in the mix where it lands well.
@@ -239,35 +348,41 @@ so the listener never confuses them.
 
 1. **Title card text** — project name only (current pick), or pair it
    with a tagline? Saving the tagline for the close still lands harder.
-2. **Music** — sparse piano or quiet strings; royalty-free leads
-   acceptable. Avoid "corporate inspirational." Maker-driven framing
-   tolerates more sparse + deliberate than kid-driven would have.
-3. **VO performance** — your own voice (preferred for authenticity in
+2. **VO performance** — your own voice (preferred for authenticity in
    the maker-driven framing), or ElevenLabs flash? Self-read fits the
    "quietly proud maker" register better than any TTS will.
-4. **Submission summary** — `docs/specs/submission-summary.md` may
+3. **Submission summary** — `docs/specs/submission-summary.md` may
    anchor on the older kid-driven copy. Update after recording locks
-   and the actual `[NAME]` and `[PROP]` are known.
-5. **Optional second prop chain** — keep as fallback, or commit if
+   so it references Bob and the ice cream hat by name.
+4. **Optional second prop chain** — keep as fallback, or commit if
    takes are clean? Two asks in a row sells "creative play" harder.
    With no kid scheduling pressure, the cost of trying both is low.
 
 ## What's locked and what's open
 
 **Locked:**
-- 2:30 length, single-narrator (maker) VO, in-app audio.
+
+- 2:55 length, single-narrator (maker) VO, in-app audio.
+- Speech-only audio. No music, no sound effects.
 - No webcam feed except hands-only insert.
 - Maker drives every beat. No kid recording.
 - Beat order and timings as listed above.
-- Recolor flourish beat included.
 - Naming beat is in.
+- Puppet name: **Bob**.
+- Money-shot prop: **ice cream hat**.
+- Dance beat after scene placement (demonstrates the body-language
+  signal path from webcam to model).
+- 1:54 of demo footage already recorded, covering cold-open through
+  money-shot plus a dance-with-hats victory shot (now the closer).
+- Recolor and cache-flex beats removed — replaced by a "things we
+  didn't cover" architecture enumeration in the back ~1 minute.
 
-**Open until recording lands:**
-- Specific `[NAME]` (used in setup-naming, catalog-dressing, and the
-  architecture VO Phase A and B). Pick before recording starts and
-  use it consistently across all takes.
-- Specific `[PROP]` (cold-open shot, materialization beat, cache-flex
-  line, final shot). Optional `[SECOND_PROP]` for the back-to-back
-  chain.
-- Whether the cache flex re-asks for the same `[PROP]` or a different
-  generated asset. Same-prop is the cleanest cache claim.
+**Open until VO and visuals land:**
+
+- Visual treatment for beat 10: animated boxes vs. harvested screen
+  captures (action JSON, asset spec) vs. a hybrid. Recommend hybrid:
+  one diagram building behind, plus short concrete inserts (STT HUD
+  frame, asset-spec JSON inset) when the VO names something specific.
+- Whether to record the bridge line ("A few things we didn't get to
+  show:") with a small "audible breath" pause before the list, or
+  cold-cut into sub-item 1.
