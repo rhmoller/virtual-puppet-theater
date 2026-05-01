@@ -26,6 +26,13 @@ import {
   }
 }
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error(
+    "ANTHROPIC_API_KEY is not set. Export it before starting the server.",
+  );
+  process.exit(1);
+}
+
 const PORT = Number(process.env.PORT ?? 3001);
 // Map brain size choice → Claude model. Defaults to large/Opus when the
 // query param is missing or unrecognized.

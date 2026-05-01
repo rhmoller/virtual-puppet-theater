@@ -4,12 +4,19 @@
 
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
-const client = new ElevenLabsClient(); // reads ELEVENLABS_API_KEY
-
 // Default is George — narrator-ish; override via env once a better voice
 // is auditioned in the dashboard.
 const VOICE_ID = process.env.STAGE_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
 const MODEL_ID = process.env.STAGE_TTS_MODEL ?? "eleven_flash_v2_5";
+
+let cachedClient: ElevenLabsClient | null = null;
+function getClient(): ElevenLabsClient {
+  if (!process.env.ELEVENLABS_API_KEY) {
+    throw new Error("ELEVENLABS_API_KEY is not set; TTS is disabled.");
+  }
+  if (!cachedClient) cachedClient = new ElevenLabsClient();
+  return cachedClient;
+}
 
 export async function synthesize(text: string): Promise<ArrayBuffer> {
   const startedAt = performance.now();
@@ -19,7 +26,7 @@ export async function synthesize(text: string): Promise<ArrayBuffer> {
     chars: text.length,
     text,
   });
-  const stream = await client.textToSpeech.convert(VOICE_ID, {
+  const stream = await getClient().textToSpeech.convert(VOICE_ID, {
     text,
     modelId: MODEL_ID,
   });
