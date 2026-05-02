@@ -10,7 +10,9 @@
     "test": "bun test",
     "lint": "oxlint",
     "format": "oxfmt",
-    "format:check": "oxfmt --check"
+    "format:check": "oxfmt --check",
+    "gen:asset": "bun run scripts/generate-asset.ts",
+    "gen:batch": "bun run scripts/batch-generate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.0",
@@ -23,6 +25,7 @@
     "@types/three": "^0.184.0",
     "oxfmt": "^0.46.0",
     "oxlint": "^1.61.0",
+    "playwright": "^1.59.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.10"
   }

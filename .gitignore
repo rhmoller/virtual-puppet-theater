@@ -8,3 +8,4 @@ dist
 docs/hackathon-brief.md
 .claude/
 presentation-assets/seg-*.mp4
+generated-assets/
