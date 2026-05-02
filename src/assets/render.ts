@@ -20,7 +20,11 @@ import type { AssetSpec, AssetShape } from "../../server/protocol.ts";
 // roughly ±0.5 on its main axes (with a few exceptions for thin axes
 // like torus tube depth). The asset-generator prompt documents per-shape
 // extents so the LLM can compose contiguous shapes by extent math.
-const GEOMETRIES: Record<AssetShape, THREE.BufferGeometry> = {
+//
+// `tube`, `ribbon`, and `slice` are NOT in this cache — they're built
+// per-part from spec fields (path / radius / width / sweep).
+type CachedShape = Exclude<AssetShape, "tube" | "ribbon" | "slice">;
+const GEOMETRIES: Record<CachedShape, THREE.BufferGeometry> = {
   sphere: new THREE.SphereGeometry(0.5, 18, 14),
   box: new THREE.BoxGeometry(1, 1, 1),
   cone: new THREE.ConeGeometry(0.5, 1, 18),
@@ -136,14 +140,121 @@ function makeCrescentGeometry(): THREE.BufferGeometry {
   return geom;
 }
 
+// Build a circular sector — the silhouette of a pizza slice / cake slice
+// / pie wedge / cheese wedge viewed face-on. Apex at +Y top, arc curving
+// down-and-around at -Y. `sweepRad` is the angle of the wedge in radians;
+// 60° (π/3) is a typical 1/6 slice. The shape's radius is 0.5 so it fits
+// inside ±0.5 in X for sweeps up to ~60°; wider sweeps overflow X.
+//
+// Z depth is 1.0 (extruded), so the unscaled slab spans ±0.5 in Z. This
+// matches box/wedge/cylinder convention so scale_z applied to the part
+// directly equals the slab's thickness — and after the lay-flat rotation
+// [π/2,0,0], scale_z is the slab's Y-thickness in slot-local space.
+function makeSliceGeometry(sweepRad: number): THREE.BufferGeometry {
+  const r = 0.5;
+  const halfSweep = sweepRad / 2;
+  const startAngle = -Math.PI / 2 - halfSweep;
+  const endAngle = -Math.PI / 2 + halfSweep;
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(r * Math.cos(startAngle), r * Math.sin(startAngle));
+  shape.absarc(0, 0, r, startAngle, endAngle, false);
+  shape.lineTo(0, 0);
+  const geom = new THREE.ExtrudeGeometry(shape, { depth: 1.0, bevelEnabled: false });
+  geom.computeBoundingBox();
+  const bb = geom.boundingBox!;
+  const cy = (bb.min.y + bb.max.y) / 2;
+  geom.translate(0, -cy, -0.5);
+  return geom;
+}
+
+// Build a smooth tube along a Catmull-Rom curve through `path`. Each
+// `path` point is in part-local space; the part's own position/rotation/
+// scale on the mesh transforms the whole curve into slot-local space.
+// Returns null if there aren't enough control points.
+function makeTubeGeometry(
+  path: ReadonlyArray<readonly [number, number, number]>,
+  radius: number,
+): THREE.BufferGeometry | null {
+  if (path.length < 2) return null;
+  const points = path.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.5);
+  return new THREE.TubeGeometry(curve, 32, radius, 8, false);
+}
+
+// Build a flat ribbon following a Catmull-Rom curve. The strip width is
+// applied perpendicular to the curve's tangent, with a stable up-axis so
+// the ribbon doesn't flip. Useful for scarves, banners, capes.
+function makeRibbonGeometry(
+  path: ReadonlyArray<readonly [number, number, number]>,
+  width: number,
+): THREE.BufferGeometry | null {
+  if (path.length < 2) return null;
+  const points = path.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.5);
+  const samples = 48;
+  const half = width * 0.5;
+  const up = new THREE.Vector3(0, 1, 0);
+  const fallback = new THREE.Vector3(1, 0, 0);
+
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const p = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t).normalize();
+    let normal = new THREE.Vector3().crossVectors(tangent, up);
+    if (normal.lengthSq() < 1e-4) normal.copy(fallback);
+    normal.normalize();
+    vertices.push(
+      p.x - normal.x * half,
+      p.y - normal.y * half,
+      p.z - normal.z * half,
+      p.x + normal.x * half,
+      p.y + normal.y * half,
+      p.z + normal.z * half,
+    );
+  }
+  for (let i = 0; i < samples; i++) {
+    const a = i * 2;
+    const b = a + 1;
+    const c = a + 2;
+    const d = a + 3;
+    indices.push(a, c, b, b, c, d);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+  return geom;
+}
+
 export function renderSpec(spec: AssetSpec): THREE.Group {
   const group = new THREE.Group();
   for (const part of spec.parts) {
-    const geom = GEOMETRIES[part.shape];
+    let geom: THREE.BufferGeometry | null;
+    if (part.shape === "tube") {
+      geom = part.path ? makeTubeGeometry(part.path, part.radius ?? 0.1) : null;
+    } else if (part.shape === "ribbon") {
+      geom = part.path ? makeRibbonGeometry(part.path, part.width ?? 0.3) : null;
+    } else if (part.shape === "slice") {
+      geom = makeSliceGeometry(part.sweep ?? Math.PI / 3);
+    } else {
+      geom = GEOMETRIES[part.shape] ?? null;
+    }
     if (!geom) continue;
+
+    const transparent = part.transparent === true;
     const mat = new THREE.MeshStandardMaterial({
       color: parseColor(part.color),
       roughness: 0.7,
+      transparent,
+      opacity: transparent ? 0.5 : 1.0,
+      depthWrite: !transparent,
+      // Ribbons are zero-thickness strips and need to render from both
+      // sides. Other shapes are closed meshes — single-sided is fine.
+      side: part.shape === "ribbon" ? THREE.DoubleSide : THREE.FrontSide,
     });
     const mesh = new THREE.Mesh(geom, mat);
     // Coerce arrays to length-3 with sane defaults — the wire schema

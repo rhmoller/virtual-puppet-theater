@@ -112,7 +112,10 @@ export type AssetShape =
   | "pyramid"
   | "wedge"
   | "heart"
-  | "crescent";
+  | "crescent"
+  | "tube"
+  | "ribbon"
+  | "slice";
 export type AssetColor = string | number;
 export type AssetSpec = {
   parts: Array<{
@@ -121,6 +124,22 @@ export type AssetSpec = {
     position?: [number, number, number];
     rotation?: [number, number, number];
     scale?: [number, number, number];
+    // tube + ribbon: a list of 3D control points the curve passes through.
+    // Coordinates are part-local (the part's `position` then offsets the
+    // whole curve into slot-local space). Smooth Catmull-Rom interpolation
+    // is applied between points; 3–6 points is typical.
+    path?: ReadonlyArray<readonly [number, number, number]>;
+    // tube only: tube radius (default 0.1).
+    radius?: number;
+    // ribbon only: strip width measured perpendicular to the curve direction
+    // (default 0.3).
+    width?: number;
+    // Render the part with reduced opacity (~0.5). For glass / water / ice /
+    // ghosts. Most parts should leave this unset.
+    transparent?: boolean;
+    // slice only: sweep angle in radians (default π/3 = 60° = 1/6 of a pie).
+    // Common values: π/4 (45°, 1/8 pie), π/3 (60°, 1/6 pie), π/2 (90°, quarter).
+    sweep?: number;
   }>;
 };
 
@@ -211,6 +230,9 @@ const SHAPES = [
   "wedge",
   "heart",
   "crescent",
+  "tube",
+  "ribbon",
+  "slice",
 ] as const;
 
 // Anthropic's structured-output schema engine doesn't support `oneOf`,
@@ -347,8 +369,48 @@ export const ASSET_SPEC_JSON_SCHEMA = {
               description: "Exactly 3 numbers: [sx, sy, sz] as multipliers on a unit primitive.",
               items: { type: "number" },
             },
+            path: {
+              type: ["array", "null"],
+              description:
+                'Required for shape="tube" and shape="ribbon". Each element is [x,y,z] in part-local space. 3-6 control points; the curve passes smoothly through them. null for all other shapes.',
+              items: {
+                type: "array",
+                items: { type: "number" },
+              },
+            },
+            radius: {
+              type: ["number", "null"],
+              description:
+                'Tube radius for shape="tube" (typical 0.05-0.2). null for all other shapes.',
+            },
+            width: {
+              type: ["number", "null"],
+              description:
+                'Strip width for shape="ribbon" (typical 0.1-0.5). null for all other shapes.',
+            },
+            transparent: {
+              type: ["boolean", "null"],
+              description:
+                'Set true to render the part at ~50% opacity, suggesting glass / water / ice / ghost. null or false for solid.',
+            },
+            sweep: {
+              type: ["number", "null"],
+              description:
+                'Sweep angle in radians for shape="slice" (default π/3 ≈ 1.047 = 60° = 1/6 of a pie). Common: 0.785 (45°/eighth), 1.047 (60°/sixth), 1.571 (90°/quarter). null for all other shapes.',
+            },
           },
-          required: ["shape", "color", "position", "rotation", "scale"],
+          required: [
+            "shape",
+            "color",
+            "position",
+            "rotation",
+            "scale",
+            "path",
+            "radius",
+            "width",
+            "transparent",
+            "sweep",
+          ],
         },
       },
     },
