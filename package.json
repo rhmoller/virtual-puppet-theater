@@ -12,7 +12,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "gen:asset": "bun run scripts/generate-asset.ts",
-    "gen:batch": "bun run scripts/batch-generate.ts"
+    "gen:batch": "bun run scripts/batch-generate.ts",
+    "gen:refine": "bun run scripts/refine-props.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.0",
