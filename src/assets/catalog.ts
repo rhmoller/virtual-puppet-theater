@@ -167,18 +167,18 @@ const COSMETICS: Record<string, AssetSpec> = {
       // (matching the sunglasses cylinder radius). Scale_z = 0.4 keeps
       // the tube depth shallow.
       {
-        shape: "torus_thin",
+        shape: "torus",
         color: 0x2a2a2a,
         position: [-0.4, 0, 0.15],
         rotation: [0, 0, 0],
-        scale: [0.7, 0.7, 1.0],
+        scale: [0.58, 0.58, 0.4],
       },
       {
-        shape: "torus_thin",
+        shape: "torus",
         color: 0x2a2a2a,
         position: [0.4, 0, 0.15],
         rotation: [0, 0, 0],
-        scale: [0.7, 0.7, 1.0],
+        scale: [0.58, 0.58, 0.4],
       },
       {
         shape: "box",

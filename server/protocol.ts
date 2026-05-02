@@ -104,18 +104,13 @@ export type AssetShape =
   | "cone"
   | "cylinder"
   | "torus"
-  | "torus_thin"
   | "half_sphere"
   | "capsule"
   | "star"
-  | "frustum"
-  | "pyramid"
-  | "wedge"
   | "heart"
-  | "crescent"
-  | "tube"
-  | "ribbon"
-  | "slice";
+  | "slice"
+  | "lathe"
+  | "extrude";
 export type AssetColor = string | number;
 export type AssetSpec = {
   parts: Array<{
@@ -124,22 +119,54 @@ export type AssetSpec = {
     position?: [number, number, number];
     rotation?: [number, number, number];
     scale?: [number, number, number];
-    // tube + ribbon: a list of 3D control points the curve passes through.
+    // extrude: a list of 3D control points the path passes through.
     // Coordinates are part-local (the part's `position` then offsets the
     // whole curve into slot-local space). Smooth Catmull-Rom interpolation
     // is applied between points; 3–6 points is typical.
     path?: ReadonlyArray<readonly [number, number, number]>;
-    // tube only: tube radius (default 0.1).
-    radius?: number;
-    // ribbon only: strip width measured perpendicular to the curve direction
-    // (default 0.3).
-    width?: number;
     // Render the part with reduced opacity (~0.5). For glass / water / ice /
     // ghosts. Most parts should leave this unset.
     transparent?: boolean;
     // slice only: sweep angle in radians (default π/3 = 60° = 1/6 of a pie).
     // Common values: π/4 (45°, 1/8 pie), π/3 (60°, 1/6 pie), π/2 (90°, quarter).
     sweep?: number;
+    // lathe + extrude: a 2D silhouette/cross-section. `points` is a list
+    // of [x, y] pairs forming a closed loop (last → first auto-closed).
+    // For lathe: x is the radial distance from the Y axis (≥ 0); y is the
+    //   height. Contour shapes the silhouette of a rotationally symmetric
+    //   solid (vase, bottle, dome, gem).
+    // For extrude: the contour is the cross-section perpendicular to the
+    //   sweep path. Centered around the part's local origin in 2D.
+    // `smooth: true` interpolates between points with a Catmull-Rom
+    //   curve for organic silhouettes; `false` connects with straight
+    //   line segments for faceted shapes.
+    contour?: {
+      points: ReadonlyArray<readonly [number, number]>;
+      // Optional inner perimeters that subtract from the outer to form
+      // holes. Each hole is a closed loop. Use for archways with a
+      // passage (outer wall + inner arch hole), donuts viewed face-on,
+      // window frames, picture frames, any silhouette with a cutout.
+      holes?: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+      smooth?: boolean;
+    };
+    // lathe only: sweep angle of revolution in radians (default 2π).
+    // Use < 2π for partial revolutions (a half-dome at π, a quarter at π/2).
+    lathe_sweep?: number;
+    // extrude only: cross-section scale at evenly-spaced positions along
+    // the path. Linear interpolation between values. Default [1, 1] = no
+    // taper. [1, 0] = cone (full to point). [0.3, 1.0, 0.3] = banana
+    // (thin at both ends, thick in middle). Any length ≥ 2.
+    taper?: ReadonlyArray<number>;
+    // extrude only: cap style at the start (path[0]) of the extrude.
+    // - "flat" (default): triangulated 2D cap perpendicular to the path.
+    // - "pointy": closes to a single apex point along the outward
+    //     direction at distance ≈ contour radius (cone-like tip).
+    // - "rounded": hemispherical cap (banana tip, snake-tail blunt-round).
+    // - "none": leaves the end open (visible hollow ring if seen end-on).
+    cap_start?: "flat" | "pointy" | "rounded" | "none";
+    // extrude only: cap style at the end (path[N-1]). Same options as
+    // cap_start.
+    cap_end?: "flat" | "pointy" | "rounded" | "none";
   }>;
 };
 
@@ -221,18 +248,13 @@ const SHAPES = [
   "cone",
   "cylinder",
   "torus",
-  "torus_thin",
   "half_sphere",
   "capsule",
   "star",
-  "frustum",
-  "pyramid",
-  "wedge",
   "heart",
-  "crescent",
-  "tube",
-  "ribbon",
   "slice",
+  "lathe",
+  "extrude",
 ] as const;
 
 // Anthropic's structured-output schema engine doesn't support `oneOf`,
@@ -372,21 +394,11 @@ export const ASSET_SPEC_JSON_SCHEMA = {
             path: {
               type: ["array", "null"],
               description:
-                'Required for shape="tube" and shape="ribbon". Each element is [x,y,z] in part-local space. 3-6 control points; the curve passes smoothly through them. null for all other shapes.',
+                'Required for shape="extrude". Each element is [x,y,z] in part-local space. 3-6 control points; the curve passes smoothly through them. null for all other shapes.',
               items: {
                 type: "array",
                 items: { type: "number" },
               },
-            },
-            radius: {
-              type: ["number", "null"],
-              description:
-                'Tube radius for shape="tube" (typical 0.05-0.2). null for all other shapes.',
-            },
-            width: {
-              type: ["number", "null"],
-              description:
-                'Strip width for shape="ribbon" (typical 0.1-0.5). null for all other shapes.',
             },
             transparent: {
               type: ["boolean", "null"],
@@ -398,6 +410,48 @@ export const ASSET_SPEC_JSON_SCHEMA = {
               description:
                 'Sweep angle in radians for shape="slice" (default π/3 ≈ 1.047 = 60° = 1/6 of a pie). Common: 0.785 (45°/eighth), 1.047 (60°/sixth), 1.571 (90°/quarter). null for all other shapes.',
             },
+            contour: {
+              type: ["object", "null"],
+              description:
+                'Required for shape="lathe" and shape="extrude". 2D silhouette. For lathe, points are (radial distance ≥ 0, height) revolved around the Y axis. For extrude, points are the cross-section in the plane perpendicular to the sweep path. Optional `holes` is a list of inner perimeters that subtract from the outer — use for archways, donut cross-sections, frames.',
+              properties: {
+                points: {
+                  type: "array",
+                  items: { type: "array", items: { type: "number" } },
+                },
+                holes: {
+                  type: ["array", "null"],
+                  items: {
+                    type: "array",
+                    items: { type: "array", items: { type: "number" } },
+                  },
+                },
+                smooth: { type: "boolean" },
+              },
+              required: ["points", "holes", "smooth"],
+              additionalProperties: false,
+            },
+            lathe_sweep: {
+              type: ["number", "null"],
+              description:
+                'Required for shape="lathe". Angle of revolution in radians. 2π ≈ 6.283 for a full revolution (most common), π for a half-dome, π/2 for a quarter.',
+            },
+            taper: {
+              type: ["array", "null"],
+              description:
+                'Required for shape="extrude". Cross-section scale at evenly-spaced positions along the path. [1,1] = no taper. [1,0] = cone (point at the end). [0.3, 1.0, 0.3] = fat middle, thin ends (banana). Any length ≥ 2; values linearly interpolated.',
+              items: { type: "number" },
+            },
+            cap_start: {
+              type: ["string", "null"],
+              description:
+                'Cap style at path[0] for shape="extrude". One of: "flat" (triangulated, perpendicular to tangent), "pointy" (cone-shaped apex), "rounded" (hemispherical bulge), "none" (open end). Defaults to "flat" if null. null for all other shapes.',
+            },
+            cap_end: {
+              type: ["string", "null"],
+              description:
+                'Cap style at path[N-1] for shape="extrude". One of: "flat", "pointy", "rounded", "none". Same options as cap_start. null for all other shapes.',
+            },
           },
           required: [
             "shape",
@@ -406,10 +460,13 @@ export const ASSET_SPEC_JSON_SCHEMA = {
             "rotation",
             "scale",
             "path",
-            "radius",
-            "width",
             "transparent",
             "sweep",
+            "contour",
+            "lathe_sweep",
+            "taper",
+            "cap_start",
+            "cap_end",
           ],
         },
       },
